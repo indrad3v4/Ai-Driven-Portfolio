@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -911,7 +912,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
   return (
     <div ref={containerRef} tabIndex={0} className="relative w-full h-full flex flex-col items-center justify-center outline-none overflow-hidden">
       {appState === 'PLAYING' && (
-        <div className={`w-full flex justify-between px-4 py-2 font-retro text-sm md:text-xl z-10 absolute top-0 backdrop-blur-sm pointer-events-none ${headerColor} ${theme === 'LIGHT' ? 'bg-white/50' : 'bg-black/50'}`}>
+        <div className={`w-full flex justify-between px-4 py-2 font-mono text-sm md:text-xl z-10 absolute top-0 backdrop-blur-sm pointer-events-none ${headerColor} ${theme === 'LIGHT' ? 'bg-white/50' : 'bg-black/50'}`}>
             <div>LVL: <span className={theme === 'LIGHT' ? 'text-cyan-700' : 'text-[#05d9e8]'}>{currentLevelIndex + 1}/3</span></div>
             <div>SCORE: <span className={theme === 'LIGHT' ? 'text-orange-600' : 'text-[#f9c80e]'}>{score}</span></div>
         </div>

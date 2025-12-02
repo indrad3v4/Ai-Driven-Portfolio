@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -17,7 +18,7 @@ const RetroButton: React.FC<RetroButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyle = "font-retro uppercase text-xs md:text-sm py-3 px-6 border-4 transition-all duration-150 active:translate-y-1 relative overflow-hidden group";
+  const baseStyle = "font-display tracking-wider uppercase text-lg md:text-xl py-3 px-6 border-4 transition-all duration-150 active:translate-y-1 relative overflow-hidden group";
 
   const variants = {
     primary: "bg-[#ff2a6d] border-[#05d9e8] text-[#0a0a12] hover:bg-[#ff5c8f] hover:text-white hover:border-white hover:shadow-[0_0_15px_rgba(255,42,109,0.7)]",
@@ -27,7 +28,7 @@ const RetroButton: React.FC<RetroButtonProps> = ({
 
   const loadingOverlay = (
     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-      <span className="animate-pulse">LOADING...</span>
+      <span className="animate-pulse font-mono text-xs">LOADING...</span>
     </div>
   );
 

@@ -4,11 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>One Shot Arcade</title>
+    <title>Indra AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
     <style>
         /* Custom Retro Scrollbar */
         ::-webkit-scrollbar {
@@ -17,7 +17,7 @@
             background-color: transparent;
         }
         ::-webkit-scrollbar-track {
-            border: 2px solid #05d9e8;
+            border: 2px solid var(--neon-cyan);
             background-color: rgba(0,0,0,0.2);
         }
         .light-mode ::-webkit-scrollbar-track {
@@ -25,11 +25,11 @@
             background-color: rgba(0,0,0,0.05);
         }
         ::-webkit-scrollbar-thumb {
-            background-color: #ff2a6d;
-            border: 2px solid #05d9e8;
+            background-color: var(--jewel-ruby);
+            border: 2px solid var(--neon-cyan);
         }
         .light-mode ::-webkit-scrollbar-thumb {
-            background-color: #ff2a6d;
+            background-color: var(--jewel-ruby);
             border: 2px solid #333;
         }
 
@@ -60,7 +60,7 @@
         }
 
         .retro-text-glow {
-            text-shadow: 0 0 8px rgba(5, 217, 232, 0.7);
+            text-shadow: 0 0 8px var(--neon-cyan);
         }
         .light-mode .retro-text-glow {
             text-shadow: 0 0 2px rgba(5, 217, 232, 0.5);
@@ -74,13 +74,19 @@
         }
 
         body {
-            font-family: 'VT323', monospace;
+            font-family: 'Inter', sans-serif;
             touch-action: none; /* Prevents double-tap zoom and scroll on game controls */
             overscroll-behavior: none;
-            background-color: #000; /* Fallback */
+            background: #0f172a; /* Fallback */
         }
-        h1, h2, h3, h4, h5, h6, .font-retro {
+        h1, h2, h3, h4, h5, h6, .font-display {
+            font-family: 'Bebas Neue', sans-serif;
+        }
+        .font-retro {
             font-family: 'Press Start 2P', cursive;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
         }
     </style>
 <script type="importmap">

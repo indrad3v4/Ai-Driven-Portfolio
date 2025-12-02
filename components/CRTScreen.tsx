@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -27,7 +28,7 @@ const CRTScreen: React.FC<CRTScreenProps> = ({ children, title, className = '', 
   return (
     <div className={`relative flex flex-col h-full ${className}`}>
         {title && (
-            <div className={`font-retro text-xs mb-2 tracking-widest ${titleColor}`}>
+            <div className={`font-mono text-xs mb-2 tracking-widest ${titleColor}`}>
                 {">"} {title}
             </div>
         )}

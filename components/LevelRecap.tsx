@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -77,12 +78,12 @@ const LevelRecap: React.FC<LevelRecapProps> = ({ stats, onNextLevel, onRetry, on
   const efficiency = Math.round((stats.uniqueTilesVisited / Math.max(1, stats.stepsTaken)) * 100);
   
   return (
-    <div className={`absolute inset-0 h-full w-full flex flex-col items-center justify-center p-2 md:p-8 font-retro overflow-y-auto backdrop-blur-sm z-50 ${overlayBg}`}>
+    <div className={`absolute inset-0 h-full w-full flex flex-col items-center justify-center p-2 md:p-8 font-body overflow-y-auto backdrop-blur-sm z-50 ${overlayBg}`}>
       <div className={`max-w-5xl w-full border-4 ${borderColor} p-4 md:p-6 relative ${bgClass} ${glowColor} flex flex-col my-auto shrink-0`}>
         
         {/* Header */}
         <div className={`text-center border-b-4 pb-2 mb-4 shrink-0 ${stats.isWin ? (theme === 'LIGHT' ? 'border-pink-500' : 'border-[#ff2a6d]') : (theme === 'LIGHT' ? 'border-red-500' : 'border-[#ff0000]')}`}>
-          <h2 className={`text-2xl md:text-4xl mb-1 ${headerColor} tracking-widest retro-text-glow`}>
+          <h2 className={`font-display text-2xl md:text-4xl mb-1 ${headerColor} tracking-widest retro-text-glow uppercase`}>
               {stats.isWin ? `MISSION DEBRIEF` : 'MISSION TERMINATED'}
           </h2>
         </div>
@@ -95,7 +96,7 @@ const LevelRecap: React.FC<LevelRecapProps> = ({ stats, onNextLevel, onRetry, on
                 {isLoading && (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center z-10 p-4 ${theme === 'LIGHT' ? 'bg-white/90' : 'bg-black/90'}`}>
                         <div className="text-center">
-                            <p className={`animate-pulse mb-2 text-xs tracking-widest opacity-70 ${theme === 'LIGHT' ? 'text-cyan-700' : 'text-[#05d9e8]'}`}>
+                            <p className={`animate-pulse mb-2 text-xs tracking-widest opacity-70 ${theme === 'LIGHT' ? 'text-cyan-700' : 'text-[#05d9e8] font-mono'}`}>
                                 PROCESSING VISUALS...
                             </p>
                             <div className={`w-32 h-1 mx-auto rounded-full overflow-hidden ${theme === 'LIGHT' ? 'bg-gray-300' : 'bg-[#333]'}`}>
@@ -107,15 +108,15 @@ const LevelRecap: React.FC<LevelRecapProps> = ({ stats, onNextLevel, onRetry, on
 
                 {error && (
                     <div className="flex flex-col items-center text-center p-4">
-                        <p className="text-[#ff0000] mb-4">{error}</p>
-                        <p className="text-gray-500 text-xs">VISUAL DATA CORRUPTED</p>
+                        <p className="text-[#ff0000] mb-4 font-mono">{error}</p>
+                        <p className="text-gray-500 text-xs font-mono">VISUAL DATA CORRUPTED</p>
                     </div>
                 )}
 
                 {!isLoading && !recapImageUrl && !error && (
                     <div className="flex flex-col items-center justify-center h-full w-full opacity-50">
                          <div className="text-6xl mb-4 grayscale">👾</div>
-                         <p className="text-xs text-gray-500">NO SIGNAL</p>
+                         <p className="text-xs text-gray-500 font-mono">NO SIGNAL</p>
                     </div>
                 )}
 
@@ -125,11 +126,11 @@ const LevelRecap: React.FC<LevelRecapProps> = ({ stats, onNextLevel, onRetry, on
             </div>
 
             {/* RIGHT: Data Log */}
-            <div className={`flex-1 border-2 p-3 font-vt323 flex flex-col overflow-y-auto max-h-[200px] landscape:max-h-[60vh] lg:max-h-none ${panelBg}`}>
-                <h3 className={`border-b-2 mb-2 pb-1 tracking-widest text-lg sticky top-0 ${subHeaderColor} ${theme === 'LIGHT' ? 'bg-white' : 'bg-black/90'}`}>
+            <div className={`flex-1 border-2 p-3 font-mono flex flex-col overflow-y-auto max-h-[200px] landscape:max-h-[60vh] lg:max-h-none ${panelBg}`}>
+                <h3 className={`font-display border-b-2 mb-2 pb-1 tracking-widest text-lg sticky top-0 ${subHeaderColor} ${theme === 'LIGHT' ? 'bg-white' : 'bg-black/90'}`}>
                     MISSION_LOG.DAT
                 </h3>
-                <div className="space-y-1 md:space-y-2 text-sm md:text-lg">
+                <div className="space-y-1 md:space-y-2 text-sm md:text-base">
                     <div className="flex justify-between">
                         <span className="text-gray-500">STATUS:</span>
                         <span className={stats.isWin ? (theme === 'LIGHT' ? "text-cyan-600" : "text-[#05d9e8]") : "text-[#ff0000]"}>{stats.isWin ? "COMPLETE" : "FAILED"}</span>
@@ -156,7 +157,7 @@ const LevelRecap: React.FC<LevelRecapProps> = ({ stats, onNextLevel, onRetry, on
                     </div>
                     <div className={`flex justify-between border-t pt-2 mt-2 ${theme === 'LIGHT' ? 'border-gray-300' : 'border-[#333]'}`}>
                         <span className="text-gray-500">GRADE:</span>
-                        <span className={`text-xl md:text-2xl ${stats.grade === 'S' || stats.grade === 'A' ? (theme === 'LIGHT' ? 'text-yellow-600' : 'text-[#f9c80e]') : (theme === 'LIGHT' ? 'text-black' : 'text-white')}`}>{stats.grade}</span>
+                        <span className={`text-xl md:text-2xl font-display ${stats.grade === 'S' || stats.grade === 'A' ? (theme === 'LIGHT' ? 'text-yellow-600' : 'text-[#f9c80e]') : (theme === 'LIGHT' ? 'text-black' : 'text-white')}`}>{stats.grade}</span>
                     </div>
                 </div>
             </div>

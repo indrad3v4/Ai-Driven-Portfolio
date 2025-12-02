@@ -1,0 +1,212 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === DESIGN SYSTEM: SENSUAL ANIME FUSION === */
+:root[data-theme="dark"] {
+  /* === BACKGROUND LAYERS === */
+  --bg-void: #0a0412;           /* Deep space purple-black */
+  --bg-canvas: #12081d;         /* Primary canvas */
+  --bg-surface: #1d0f2e;        /* Elevated surfaces */
+  --bg-overlay: #2a1640;        /* Modals, dropdowns */
+  
+  /* === JEWEL TONE ACCENTS === */
+  /* Amethyst (Primary) */
+  --accent-amethyst-50: #f5e8ff;
+  --accent-amethyst-100: #e9d0ff;
+  --accent-amethyst-300: #c084fc;
+  --accent-amethyst-500: #9d4edd;  /* PRIMARY — CTA buttons */
+  --accent-amethyst-700: #7c3aed;
+  --accent-amethyst-900: #5b21b6;
+  
+  /* Emerald (Success/Hero) */
+  --accent-emerald-300: #6ee7b7;
+  --accent-emerald-500: #10b981;   /* Hero energy */
+  --accent-emerald-700: #059669;
+  
+  /* Ruby (Error/Villain) */
+  --accent-ruby-300: #fca5a5;
+  --accent-ruby-500: #ef4444;      /* Villain energy */
+  --accent-ruby-700: #dc2626;
+  
+  /* Sapphire (Info/Links) */
+  --accent-sapphire-300: #93c5fd;
+  --accent-sapphire-500: #3b82f6;
+  --accent-sapphire-700: #2563eb;
+  
+  /* Topaz (Highlight/Achievement) */
+  --accent-topaz-300: #fcd34d;
+  --accent-topaz-500: #f59e0b;
+  --accent-topaz-700: #d97706;
+  
+  /* === SKIN TONES (Warm, Soft) === */
+  --skin-light: #fde4cf;        /* Light text on dark */
+  --skin-medium: #f4c7a1;       /* Hover states */
+  --skin-shadow: #8b6f5a;       /* Muted text */
+  
+  /* === MANGA LINEWORK === */
+  --line-bold: #ffffff;         /* Sharp edges */
+  --line-soft: rgba(255, 255, 255, 0.2); /* Subtle dividers */
+  --line-glow: rgba(157, 78, 221, 0.6);  /* Glowing accents */
+  
+  /* === TEXT HIERARCHY === */
+  --text-primary: #fde4cf;      /* Headings, body */
+  --text-secondary: #c4a88d;    /* Subtext */
+  --text-muted: #8b7465;        /* Disabled */
+  --text-inverse: #0a0412;      /* Text on colored bg */
+  
+  /* === SHADOWS === */
+  --shadow-sm: 0 2px 8px rgba(10, 4, 18, 0.3);
+  --shadow-md: 0 4px 16px rgba(10, 4, 18, 0.5);
+  --shadow-lg: 0 8px 32px rgba(10, 4, 18, 0.7);
+  --shadow-glow-amethyst: 0 0 24px rgba(157, 78, 221, 0.6);
+  --shadow-glow-emerald: 0 0 24px rgba(16, 185, 129, 0.6);
+  --shadow-glow-ruby: 0 0 24px rgba(239, 68, 68, 0.6);
+}
+
+:root[data-theme="light"] {
+  --bg-void: #fef8f0;
+  --bg-canvas: #fff5eb;
+  --bg-surface: #ffe4d6;
+  --bg-overlay: #ffd4c1;
+  
+  /* Invert jewel tones */
+  --accent-amethyst-500: #7c3aed;
+  --accent-emerald-500: #059669;
+  --accent-ruby-500: #dc2626;
+  --accent-sapphire-500: #2563eb;
+  --accent-topaz-500: #d97706;
+  
+  --line-bold: #2a1640;
+  --line-soft: rgba(42, 22, 64, 0.2);
+  --line-glow: rgba(124, 58, 237, 0.6);
+
+  --text-primary: #2a1640;
+  --text-secondary: #4a3257;
+  --text-muted: #6b5270;
+  --text-inverse: #fef8f0;
+  
+  --shadow-sm: 0 2px 8px rgba(42, 22, 64, 0.1);
+  --shadow-md: 0 4px 16px rgba(42, 22, 64, 0.15);
+  --shadow-lg: 0 8px 32px rgba(42, 22, 64, 0.2);
+  --shadow-glow-amethyst: 0 0 16px rgba(124, 58, 237, 0.4);
+}
+
+:root {
+  /* === TYPOGRAPHY === */
+  --font-display: 'Bebas Neue', 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  /* === BORDERS === */
+  --border-bold: 3px solid var(--line-bold);
+  --border-soft: 1px solid var(--line-soft);
+  --border-glow: 2px solid var(--line-glow);
+  
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  
+  /* === ANIMATION === */
+  --ease-snappy: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+}
+
+body {
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+/* === UTILITY CLASSES === */
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); }
+.font-body { font-family: var(--font-body); }
+
+/* Grain Overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.4;
+}
+
+/* Manga Stroke Text */
+.manga-text-stroke {
+  -webkit-text-stroke: 1px var(--accent-amethyst-500);
+  color: transparent;
+  position: relative;
+}
+.manga-text-stroke::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 2px; top: 2px;
+  -webkit-text-stroke: 0;
+  color: var(--accent-amethyst-500);
+  opacity: 0.5;
+  z-index: -1;
+}
+
+/* Arcade Cartridge Slot Pattern */
+.cartridge-slot {
+  border: var(--border-bold);
+  border-radius: var(--radius-lg);
+  box-shadow: 
+    var(--shadow-md),
+    var(--shadow-glow-amethyst),
+    inset 0 2px 0 rgba(255,255,255,0.1);
+  background: 
+    linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-overlay) 100%),
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Specific Card Glows */
+.hero-card {
+  border-color: var(--accent-emerald-500);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+}
+.villain-card {
+  border-color: var(--accent-ruby-500);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+}
+
+/* Section Numbering */
+.section-number {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  color: var(--accent-topaz-500);
+  line-height: 1;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+/* CRT Scanline Effect */
+.crt-overlay {
+    pointer-events: none;
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background-size: 100% 2px, 3px 100%;
+    z-index: 10;
+    opacity: 0.2;
+}
+
+/* Retro Glows */
+.retro-text-glow {
+  text-shadow: 0 0 8px var(--accent-amethyst-500);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-canvas); }
+::-webkit-scrollbar-thumb { background: var(--accent-amethyst-500); border-radius: 4px; }
