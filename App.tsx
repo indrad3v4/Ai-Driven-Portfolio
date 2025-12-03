@@ -15,11 +15,71 @@ import { useTheme } from './hooks/useTheme';
 import { InsightCartridge, createEmptyCartridge } from './lib/insight-object';
 import SystemWorkspace from './components/SystemWorkspace';
 import SystemArchive from './components/SystemArchive';
+import BossRaidCalendar from './components/BossRaidCalendar';
 
 // --- REUSABLE COMPONENTS ---
 
+// WEBVIEW WARNER (Detects Social Browsers)
+interface WebViewWarnerProps {
+    status: 'OK' | 'WARNING' | 'BROKEN';
+    appName: string | null;
+}
+
+const WebViewWarner: React.FC<WebViewWarnerProps> = ({ status, appName }) => {
+    if (status === 'OK') return null;
+
+    // Helper to attempt external open
+    const openExternal = () => {
+        // Fallback for Android (Intent Scheme)
+        if (/Android/i.test(navigator.userAgent)) {
+            window.location.href = `intent:${window.location.href}#Intent;end`;
+        } else {
+            // iOS/Generic - attempt pop-up, though often blocked
+            alert(`Please tap the menu icon (•••) and select "Open in Browser" to escape ${appName || 'this app'}.`);
+        }
+    };
+
+    if (status === 'BROKEN') {
+        return (
+            <div className="fixed inset-0 z-[9999] bg-[var(--accent-ruby-900)]/95 text-white flex flex-col items-center justify-center p-8 text-center backdrop-blur-xl animate-in zoom-in duration-300">
+                <div className="text-6xl mb-4 animate-pulse">⚠️</div>
+                <h2 className="font-display text-4xl mb-2 tracking-widest text-[var(--accent-topaz-300)]">CRITICAL FAILURE</h2>
+                <p className="font-mono text-sm mb-6 max-w-md leading-relaxed">
+                    The {appName || 'Social Media'} browser has severed the neural link (API Connection). 
+                    The AI cannot operate in this restricted environment.
+                </p>
+                <button 
+                    onClick={openExternal}
+                    className="px-6 py-4 bg-white text-[var(--accent-ruby-900)] font-bold font-mono rounded shadow-[0_0_30px_rgba(255,255,255,0.5)] hover:scale-105 transition-transform"
+                >
+                    OPEN IN SYSTEM BROWSER
+                </button>
+                <p className="mt-8 text-[10px] font-mono opacity-50">
+                    Tap ••• (Menu) {'>'} Open in Browser
+                </p>
+            </div>
+        );
+    }
+
+    // WARNING STATE (Slim Bar)
+    return (
+        <div className="fixed top-0 left-0 w-full z-[9999] bg-[var(--accent-topaz-500)] text-[var(--bg-void)] px-3 py-2 flex justify-between items-center shadow-[0_0_20px_var(--accent-topaz-500)] animate-in slide-in-from-top duration-500">
+            <div className="flex items-center gap-2 font-bold font-mono text-[10px] md:text-xs">
+                <span className="animate-pulse">⚠️</span>
+                <span>RUNNING IN {appName ? appName.toUpperCase() : 'APP BROWSER'}. AI MAY BE UNSTABLE.</span>
+            </div>
+            <button 
+                onClick={openExternal}
+                className="text-[9px] font-mono font-bold border border-[var(--bg-void)] px-2 py-1 rounded hover:bg-[var(--bg-void)] hover:text-[var(--accent-topaz-500)] transition-colors"
+            >
+                OPEN EXTERNAL
+            </button>
+        </div>
+    );
+};
+
 // HEADER COMPONENT (INDRA AI BRANDING)
-const Header: React.FC = () => {
+const Header: React.FC<{ onCalendarClick: () => void }> = ({ onCalendarClick }) => {
     const { theme, toggleTheme } = useTheme();
     
     return (
@@ -34,12 +94,20 @@ const Header: React.FC = () => {
                 </h1>
             </div>
             
-             <button 
-                onClick={toggleTheme}
-                className="px-3 py-1 rounded-[var(--radius-full)] bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-soft)] hover:border-[var(--border-glow)] transition-all font-mono text-[10px] font-semibold tracking-wider flex items-center gap-2"
-            >
-                {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
+            <div className="flex items-center gap-2">
+                 <button
+                    onClick={onCalendarClick}
+                    className="px-3 py-1 rounded-[var(--radius-full)] bg-[var(--bg-surface)] text-[var(--accent-emerald-500)] border border-[var(--border-soft)] hover:border-[var(--accent-emerald-500)] hover:shadow-[var(--shadow-glow-emerald)] transition-all font-mono text-[10px] font-bold tracking-wider flex items-center gap-2"
+                 >
+                    <span>📅</span> BOSS RAID
+                 </button>
+                 <button 
+                    onClick={toggleTheme}
+                    className="px-3 py-1 rounded-[var(--radius-full)] bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-soft)] hover:border-[var(--border-glow)] transition-all font-mono text-[10px] font-semibold tracking-wider flex items-center gap-2"
+                >
+                    {theme === 'dark' ? '☀️' : '🌙'}
+                </button>
+            </div>
         </header>
     );
 };
@@ -89,27 +157,20 @@ const IntroAnimation: React.FC<{ onComplete: () => void; onImpact: () => void }>
 // MAIN APP STATES
 type AppState = 'SETUP' | 'SYSTEMATIZING' | 'GAMEPLAY' | 'RECAP' | 'VICTORY';
 
-interface WorkState {
-    source: UploadedImage | null;
-    generated: UploadedImage | null;
-    status: ProcessingState;
-    progressTick: number;
-}
-
-const initialWorkState: WorkState = {
-    source: null,
-    generated: null,
-    status: 'IDLE',
-    progressTick: 0
-};
-
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('SETUP');
   const [showIntro, setShowIntro] = useState(true);
   const [uiVisible, setUiVisible] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [initialDossierId, setInitialDossierId] = useState<string | null>(null);
   
+  // WebView & Network State
+  const [connectionStatus, setConnectionStatus] = useState<'OK' | 'WARNING' | 'BROKEN'>('OK');
+  const [detectedApp, setDetectedApp] = useState<string | null>(null);
+
   // Cartridge State (The core data structure)
   const [cartridge, setCartridge] = useState<InsightCartridge>(createEmptyCartridge());
   
@@ -120,6 +181,53 @@ const App: React.FC = () => {
   
   // Theme
   const { theme } = useTheme();
+
+  // BROWSER & DEEP LINK CHECK
+  useEffect(() => {
+      // 1. Check for Social Browsers (Expanded List)
+      const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+      
+      const appPatterns = [
+          { name: 'Instagram', regex: /Instagram/i },
+          { name: 'Facebook', regex: /FBAN|FBAV/i },
+          { name: 'LinkedIn', regex: /LinkedIn/i },
+          { name: 'Twitter', regex: /Twitter|Trident/i }, // Trident covers X in-app
+          { name: 'TikTok', regex: /TikTok|Musical_ly|Bytedance/i },
+          { name: 'Snapchat', regex: /Snapchat/i },
+          { name: 'Discord', regex: /Discord/i },
+          { name: 'Slack', regex: /Slack/i },
+          { name: 'WhatsApp', regex: /WhatsApp/i },
+          { name: 'WeChat', regex: /WeChat|MicroMessenger/i },
+          { name: 'Line', regex: /Line\//i },
+          { name: 'Pinterest', regex: /Pinterest/i },
+          // Generic Android WebView heuristic: "; wv" is present in webviews but not Chrome/Firefox
+          { name: 'Android App', regex: /Android.*\; wv/i },
+      ];
+
+      const match = appPatterns.find(p => p.regex.test(ua));
+      
+      if (match) {
+          setDetectedApp(match.name);
+          setConnectionStatus('WARNING'); // Probationary Access
+      }
+
+      // 2. Check for Deep Linking
+      const params = new URLSearchParams(window.location.search);
+      const portfolioId = params.get('portfolio');
+      if (portfolioId) {
+          setInitialDossierId(portfolioId);
+          setShowArchive(true);
+          // Skip intro if deep linking for faster access
+          setShowIntro(false);
+          setUiVisible(true);
+      }
+  }, []);
+
+  const handleNetworkError = () => {
+      // Escalation Protocol: If already warned, go to BROKEN. 
+      // If assumed OK but failed specifically on network, also go to BROKEN (could be undetected webview).
+      setConnectionStatus('BROKEN');
+  };
 
   // SYNC APP STATE WITH CARTRIDGE STATUS
   useEffect(() => {
@@ -132,6 +240,15 @@ const App: React.FC = () => {
       // Transition to Systematization (Workspace)
       setAppState('SYSTEMATIZING');
       setCartridge(prev => ({ ...prev, status: 'SYSTEMATIZING' }));
+      setShowArchive(false); // Ensure archive is closed if coming from there
+  };
+
+  const handleStartTechTask = () => {
+      // Initialize a new cartridge in TECH_TASK mode
+      setCartridge(createEmptyCartridge('TECH_TASK'));
+      setAppState('SYSTEMATIZING');
+      setShowCalendar(false);
+      setShowArchive(false);
   };
 
   const handleLevelComplete = (stats: LevelStats) => {
@@ -166,63 +283,58 @@ const App: React.FC = () => {
 
   const renderCarouselContent = () => {
     switch (carouselIndex) {
-        case 0: // RULES
-            return (
-                <div className="w-full flex flex-col gap-3 font-mono text-[9px] md:text-[10px] px-1 justify-start h-full overflow-y-auto py-1 scrollbar-thin">
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                        <div className="flex gap-2 items-baseline">
-                            <span className="text-[var(--accent-amethyst-500)] font-bold shrink-0">01.</span>
-                            <span className="text-[var(--text-primary)] font-bold tracking-wide">INSERT INSIGHT CARTRIDGE</span>
-                        </div>
-                        <span className="pl-6 text-[var(--text-muted)] leading-tight">Define Hero (goal) + Villain (barrier)</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                        <div className="flex gap-2 items-baseline">
-                            <span className="text-[var(--accent-amethyst-500)] font-bold shrink-0">02.</span>
-                            <span className="text-[var(--text-primary)] font-bold tracking-wide">CHOOSE EXPLORATION MODE</span>
-                        </div>
-                         <span className="pl-6 text-[var(--text-muted)] leading-tight">Click quadrant (STRATEGY/CREATIVE/PRODUCING/MEDIA) to apply lens OR skip to brainstorm raw insight.</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5 shrink-0">
-                        <div className="flex gap-2 items-baseline">
-                            <span className="text-[var(--accent-amethyst-500)] font-bold shrink-0">03.</span>
-                            <span className="text-[var(--text-primary)] font-bold tracking-wide">AGENT SYSTEMATIZES</span>
-                        </div>
-                        <span className="pl-6 text-[var(--text-muted)] leading-tight">Agent builds your unique AI system code.</span>
-                    </div>
-                </div>
-            );
-        case 1: // PRICING
+        case 0: // TUTORIAL
             return (
                 <div className="w-full flex flex-col gap-2 font-mono text-[10px] justify-center h-full px-1">
-                     <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-1">
-                         <span className="text-[var(--text-muted)] tracking-wider">TUTORIAL</span>
-                         <span className="text-[var(--accent-emerald-500)] font-bold">20 CREDITS (FREE)</span>
+                     <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2">
+                         <span className="text-[var(--text-muted)] tracking-wider">MODE</span>
+                         <span className="text-[var(--accent-emerald-500)] font-bold">TUTORIAL</span>
                      </div>
-                     <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-1">
-                         <span className="text-[var(--text-muted)] tracking-wider">ARCADE</span>
-                         <span className="text-[var(--accent-topaz-500)] font-bold">1.9 CREDITS / TURN</span>
-                     </div>
-                     <div className="flex justify-between items-start">
-                         <span className="text-[var(--text-muted)] tracking-wider shrink-0 mr-2">BULK BUY</span>
-                         <span className="text-[var(--accent-ruby-500)] font-bold text-right">$5 = 50 CREDITS</span>
+                     <div className="flex flex-col gap-1 mt-1">
+                         <div className="flex justify-between">
+                            <span className="text-[var(--text-primary)]">20 CREDITS</span>
+                            <span className="text-[var(--accent-emerald-500)] font-bold">(FREE)</span>
+                         </div>
+                         <p className="text-[var(--text-secondary)] leading-tight text-[9px] mt-1">
+                             Use 5 turns to unlock the Cabinet. Explore your insight.
+                         </p>
                      </div>
                 </div>
             );
-        case 2: // SYSTEM
+        case 1: // ARCADE
             return (
-                <div className="w-full flex flex-col items-center justify-center gap-2 font-mono text-[10px] h-full">
-                    <div className="w-full border border-[var(--accent-topaz-500)]/30 bg-[var(--accent-topaz-500)]/10 p-2 rounded text-center shadow-[0_0_15px_rgba(245,158,11,0.15)]">
-                        <span className="text-[var(--accent-topaz-500)] tracking-widest font-bold">SAVE CODE = YOUR SYSTEM</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1 w-full text-center">
-                        <span className="text-[var(--accent-emerald-500)] text-[9px] font-bold tracking-wide">LOAD ANYTIME. NO GAME OVER.</span>
-                        <div className="w-full border-t border-[var(--line-soft)] pt-1 mt-1 flex justify-center">
-                            <span className="text-[var(--accent-amethyst-500)] animate-pulse tracking-tight text-[8px] md:text-[9px] leading-tight">
-                                {">"} HUGGINGFACE DEPLOY SOON
-                            </span>
-                        </div>
-                    </div>
+                <div className="w-full flex flex-col gap-2 font-mono text-[10px] justify-center h-full px-1">
+                     <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2">
+                         <span className="text-[var(--text-muted)] tracking-wider">MODE</span>
+                         <span className="text-[var(--accent-topaz-500)] font-bold">ARCADE</span>
+                     </div>
+                     <div className="flex flex-col gap-1 mt-1">
+                         <div className="flex justify-between">
+                            <span className="text-[var(--text-primary)]">€0.99</span>
+                            <span className="text-[var(--accent-topaz-500)] font-bold">10 CREDITS</span>
+                         </div>
+                         <p className="text-[var(--text-secondary)] leading-tight text-[9px] mt-1">
+                             Pay-as-you-play. Continue building your system.
+                         </p>
+                     </div>
+                </div>
+            );
+        case 2: // BOSS RAID
+            return (
+                <div className="w-full flex flex-col gap-2 font-mono text-[10px] justify-center h-full px-1">
+                     <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2">
+                         <span className="text-[var(--text-muted)] tracking-wider">MODE</span>
+                         <span className="text-[var(--accent-ruby-500)] font-bold">BOSS RAID</span>
+                     </div>
+                     <div className="flex flex-col gap-1 mt-1">
+                         <div className="flex justify-between">
+                            <span className="text-[var(--text-primary)]">€50/HOUR</span>
+                            <span className="text-[var(--accent-ruby-500)] font-bold">CO-OP</span>
+                         </div>
+                         <p className="text-[var(--text-secondary)] leading-tight text-[9px] mt-1">
+                             Co-op with Indra against your BOSS | 📅 Book time
+                         </p>
+                     </div>
                 </div>
             );
         default:
@@ -236,11 +348,36 @@ const App: React.FC = () => {
 
   return (
     <div className="relative h-dvh w-full flex flex-col overflow-hidden bg-[var(--bg-void)] font-body text-[var(--text-primary)]">
+      {/* WARNING BANNER */}
+      <WebViewWarner status={connectionStatus} appName={detectedApp} />
+
       {/* HEADER */}
-      <Header />
+      <Header onCalendarClick={() => setShowCalendar(true)} />
 
       {/* Archive Modal */}
-      {showArchive && <SystemArchive onClose={() => setShowArchive(false)} />}
+      {showArchive && (
+        <SystemArchive 
+            onClose={() => {
+                setShowArchive(false);
+                setInitialDossierId(null); // Reset deep link
+            }}
+            onOpenCalendar={() => {
+                setShowArchive(false);
+                setShowCalendar(true);
+            }}
+            onStartGame={handleInsertMind}
+            initialDossierId={initialDossierId}
+        />
+      )}
+
+      {/* Calendar Modal */}
+      {showCalendar && (
+          <BossRaidCalendar 
+            isAdmin={isAdmin} 
+            onClose={() => setShowCalendar(false)} 
+            onStartTechTask={handleStartTechTask} 
+          />
+      )}
 
       {/* Intro Overlay */}
       {showIntro && <IntroAnimation onImpact={handleIntroImpact} onComplete={handleIntroComplete} />}
@@ -303,10 +440,18 @@ const App: React.FC = () => {
 
                             {/* CAROUSEL */}
                             <div className="shrink-0 bg-[var(--bg-void)]/90 p-2 md:p-3 flex flex-col gap-1 border-t border-[var(--line-soft)] h-[130px] md:h-[150px]">
-                                <div className="flex justify-center gap-2 mb-1 shrink-0">
-                                    {[0, 1, 2].map(idx => (
-                                        <button key={idx} onClick={() => setCarouselIndex(idx)} className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-all duration-300 ${carouselIndex === idx ? 'bg-[var(--accent-topaz-500)] scale-125 shadow-[0_0_8px_var(--accent-topaz-500)]' : 'bg-[var(--line-soft)] hover:bg-[var(--text-muted)]'}`} />
-                                    ))}
+                                <div className="flex justify-between items-center px-4 mb-1 shrink-0">
+                                    <button onClick={() => setCarouselIndex((i) => (i - 1 + 3) % 3)} className="text-[var(--accent-topaz-500)] hover:text-white transition-colors text-2xl font-bold">
+                                        {'<'}
+                                    </button>
+                                    <div className="flex gap-2">
+                                        {[0, 1, 2].map(idx => (
+                                            <button key={idx} onClick={() => setCarouselIndex(idx)} className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-all duration-300 ${carouselIndex === idx ? 'bg-[var(--accent-topaz-500)] scale-125 shadow-[0_0_8px_var(--accent-topaz-500)]' : 'bg-[var(--line-soft)] hover:bg-[var(--text-muted)]'}`} />
+                                        ))}
+                                    </div>
+                                    <button onClick={() => setCarouselIndex((i) => (i + 1) % 3)} className="text-[var(--accent-topaz-500)] hover:text-white transition-colors text-2xl font-bold">
+                                        {'>'}
+                                    </button>
                                 </div>
                                 <div className="flex-1 flex items-center justify-center px-2 min-h-0">
                                     {renderCarouselContent()}
@@ -325,14 +470,14 @@ const App: React.FC = () => {
                          <span className="relative z-10 group-hover:text-white transition-colors">
                              INSERT MIND (FREE TRIAL)
                          </span>
-                         <div className="absolute inset-0 bg-white/30 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out skew-x-12"></div>
+                         <div className="absolute inset-0 bg-white/30 translate-x-[-100%] group-hover:text-white transition-transform duration-500 ease-in-out skew-x-12"></div>
                      </button>
                      <div className="text-[9px] md:text-xs text-center uppercase tracking-widest text-[var(--accent-ruby-500)] font-mono mt-2 opacity-80">
                         * MUST BE A BEST PROJECT IN YOUR LIFE *
                      </div>
                      <div className="mt-2 text-center cursor-pointer group" onClick={() => setShowArchive(true)}>
                          <span className="font-mono text-[10px] md:text-xs text-[var(--text-muted)] group-hover:text-[var(--accent-topaz-500)] transition-colors uppercase tracking-wider">
-                             ⚓ SYSTEMATIZED BY INDRADEV_
+                             ⚓ RAID VICTORIES_ (PORTFOLIO)
                          </span>
                      </div>
                  </div>
@@ -347,6 +492,8 @@ const App: React.FC = () => {
                           cartridge={cartridge}
                           onUpdate={setCartridge}
                           theme={theme === 'dark' ? 'DARK' : 'LIGHT'}
+                          onAdminGrant={() => setIsAdmin(true)}
+                          onNetworkError={handleNetworkError}
                        />
                   </div>
               </div>

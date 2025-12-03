@@ -34,31 +34,58 @@ export interface SystemSpec {
     deployInstructions: string;
 }
 
+export interface TechSection {
+    status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
+    content: string;
+}
+
+export interface TechTaskData {
+    projectUrl?: string; // NEW: Store the user's provided link
+    generalInfo: TechSection;
+    techStack: TechSection;
+    structure: TechSection;
+    roles: TechSection;
+    admin: TechSection;
+    estimation?: {
+        hours: number;
+        cost: number;
+        locked: boolean;
+    };
+}
+
 export interface InsightCartridge {
     id: string;
     userName?: string;    // The Architect's name
     credits: number;      // Economy resource (1.0 per turn)
+    
+    mode: 'GAME' | 'TECH_TASK'; // NEW: Operation Mode
+
     hero: Character;      // Driver (Emerald Energy)
     villain: Character;   // Barrier (Ruby Energy)
     tension: number;      // 0-100 Conflict Magnitude
     
-    // The 4 Lenses of Systematization
+    // The 4 Lenses of Systematization (GAME MODE)
     quadrants: {
         strategy: QuadrantData;  // Emerald
         creative: QuadrantData;  // Amethyst
         producing: QuadrantData; // Sapphire
         media: QuadrantData;     // Ruby
     };
+
+    // Technical Specification Data (TECH_TASK MODE)
+    techTask?: TechTaskData;
     
     chatHistory: { role: 'user' | 'model' | 'system', content: string }[];
     systemSpec: SystemSpec | null; // The "Saved Code" artifact
     
     status: 'EMPTY' | 'INSERTED' | 'SYSTEMATIZING' | 'GAMEPLAY' | 'COMPLETE';
+    cabinetUnlocked: boolean; // Tracks if user has entered the secret code
 }
 
-export const createEmptyCartridge = (): InsightCartridge => ({
+export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' = 'GAME'): InsightCartridge => ({
     id: crypto.randomUUID(),
     credits: 20, // ~20 free turns @ 1.0 credits/turn
+    mode: mode,
     hero: {
         name: 'HERO',
         archetype: 'hero',
@@ -80,9 +107,17 @@ export const createEmptyCartridge = (): InsightCartridge => ({
         producing: { level: 0, notes: [], status: 'LOCKED' },
         media: { level: 0, notes: [], status: 'LOCKED' }
     },
+    techTask: mode === 'TECH_TASK' ? {
+        generalInfo: { status: 'PENDING', content: '' },
+        techStack: { status: 'PENDING', content: '' },
+        structure: { status: 'PENDING', content: '' },
+        roles: { status: 'PENDING', content: '' },
+        admin: { status: 'PENDING', content: '' }
+    } : undefined,
     chatHistory: [],
     systemSpec: null,
-    status: 'EMPTY'
+    status: 'EMPTY',
+    cabinetUnlocked: false
 });
 
 /**
@@ -93,7 +128,7 @@ export const updateCartridgeProgress = (
     cartridge: InsightCartridge, 
     delta: Partial<InsightCartridge>
 ): InsightCartridge => {
-    return {
+    const updated = {
         ...cartridge,
         ...delta,
         hero: { ...cartridge.hero, ...(delta.hero || {}) },
@@ -105,4 +140,18 @@ export const updateCartridgeProgress = (
             media: { ...cartridge.quadrants.media, ...(delta.quadrants?.media || {}) },
         }
     };
+
+    if (cartridge.techTask || delta.techTask) {
+        updated.techTask = {
+            projectUrl: delta.techTask?.projectUrl || cartridge.techTask?.projectUrl,
+            generalInfo: { ...(cartridge.techTask?.generalInfo || {}), ...(delta.techTask?.generalInfo || {}) } as TechSection,
+            techStack: { ...(cartridge.techTask?.techStack || {}), ...(delta.techTask?.techStack || {}) } as TechSection,
+            structure: { ...(cartridge.techTask?.structure || {}), ...(delta.techTask?.structure || {}) } as TechSection,
+            roles: { ...(cartridge.techTask?.roles || {}), ...(delta.techTask?.roles || {}) } as TechSection,
+            admin: { ...(cartridge.techTask?.admin || {}), ...(delta.techTask?.admin || {}) } as TechSection,
+            estimation: delta.techTask?.estimation || cartridge.techTask?.estimation
+        };
+    }
+
+    return updated;
 };

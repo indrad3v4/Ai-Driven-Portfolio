@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -10,14 +9,17 @@ import { generatePythonAgent, generateReadme, triggerDownload } from '../lib/sys
 import { loginWithGoogle, logout, saveWorkspace, deductCredit, UserProfile, subscribeToAuth } from '../services/auth-service';
 import RetroButton from './RetroButton';
 import { User } from 'firebase/auth';
+import ManifestVisualizer from './ManifestVisualizer';
 
 interface Props {
     cartridge: InsightCartridge;
     onUpdate: (cartridge: InsightCartridge) => void;
     theme: 'DARK' | 'LIGHT';
+    onAdminGrant: () => void;
+    onNetworkError?: () => void; // New callback for WebView detection
 }
 
-const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
+const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminGrant, onNetworkError }) => {
     const [input, setInput] = useState('');
     const [isThinking, setIsThinking] = useState(false);
     const [isSystematizing, setIsSystematizing] = useState(false);
@@ -27,12 +29,23 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
     // Auth State
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [showLoginModal, setShowLoginModal] = useState(false);
+    const [showRechargeModal, setShowRechargeModal] = useState(false);
 
     // Derived State
+    const isTechMode = cartridge.mode === 'TECH_TASK';
     const isNameUndefined = !cartridge.userName || cartridge.userName === "UNDEFINED";
-    const isSetupPhase = !cartridge.hero.description || !cartridge.villain.description;
+    // Setup phase only applies in Game Mode
+    const isSetupPhase = !isTechMode && (!cartridge.hero.description || !cartridge.villain.description);
+    
+    // Economy Logic
     const isLowCredits = (userProfile?.credits || cartridge.credits) < 1;
+    // const turnCount = cartridge.chatHistory.filter(msg => msg.role === 'user').length; // Removed: Handled in handleSend
+    
+    // Unlock Logic
+    const CABINET_CODE_PREFIX = "/cabinet";
+    const CABI_PREFIX = "/cabi";
+    const SECRET_CODE = "TZ_abc123xyz"; // Standard unlock code
+    const ADMIN_HASH = "esCDtT#1mwHLn@qHEjne"; // Admin hash
 
     // Listen to Auth
     useEffect(() => {
@@ -40,7 +53,6 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
             setUser(currentUser);
             if (currentUser) {
                 // In a real app, we would fetch the full profile here again
-                // For MVP, we rely on the login return or optimistic updates
             }
         });
         return () => unsubscribe();
@@ -67,18 +79,17 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
         }
     }, [cartridge, user]);
 
-    // Automatic Deep Systematization Trigger
+    // Automatic Deep Systematization Trigger (Only Game Mode)
     useEffect(() => {
-        if (!isSetupPhase && !isSystematizing && cartridge.quadrants.strategy.level === 0) {
+        if (!isTechMode && !isSetupPhase && !isSystematizing && cartridge.quadrants.strategy.level === 0) {
             handleSystematization();
         }
-    }, [isSetupPhase]);
+    }, [isSetupPhase, isTechMode]);
 
     const handleLogin = async () => {
         const profile = await loginWithGoogle();
         if (profile) {
             setUserProfile(profile);
-            setShowLoginModal(false);
             // Sync credits from DB to Cartridge
             onUpdate({ ...cartridge, credits: profile.credits });
         }
@@ -117,10 +128,46 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
 
         const isSystemTrigger = textToSend === "SYSTEM_START";
         
+        // --- CABINET/ADMIN UNLOCK LOGIC ---
+        if (textToSend.startsWith(CABINET_CODE_PREFIX) || textToSend.startsWith(CABI_PREFIX)) {
+            const parts = textToSend.split(' ');
+            const code = parts[1] || "";
+
+            // 1. ADMIN CHECK
+            if (code === ADMIN_HASH) {
+                onAdminGrant();
+                const nextState = updateCartridgeProgress(cartridge, {
+                    chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "👁️ OMNISCIENCE GRANTED." }]
+                });
+                onUpdate(nextState);
+                setInput('');
+                return;
+            }
+
+            // 2. STANDARD UNLOCK
+            if (!cartridge.cabinetUnlocked) {
+                const nextState = updateCartridgeProgress(cartridge, {
+                    cabinetUnlocked: true,
+                    credits: cartridge.credits + 15,
+                    chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "🔓 CABINET UNLOCKED! +15 CREDITS." }]
+                });
+                onUpdate(nextState);
+                setInput('');
+                return;
+            } else {
+                const nextState = updateCartridgeProgress(cartridge, {
+                    chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "ALREADY UNLOCKED." }]
+                });
+                onUpdate(nextState);
+                setInput('');
+                return;
+            }
+        }
+
         // CHECK CREDITS (If not system trigger)
         if (!isSystemTrigger) {
             if (cartridge.credits < 1) {
-                setShowLoginModal(true);
+                setShowRechargeModal(true);
                 return;
             }
         }
@@ -152,13 +199,30 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
             // 2. Call Gemini (Ambika)
             const result = await chatWithManagerAgent(isSystemTrigger ? "Initialize Ambika." : textToSend, tempState);
             
-            // 3. Deep merge the updates
+            // 3. Update History
+            const updatedHistory = [...newHistory, { role: 'model' as const, content: result.text }];
+            
+            // 4. CHECK FOR TURN 5 HINT (Persistent Logic)
+            const userTurns = updatedHistory.filter(m => m.role === 'user').length;
+            if (userTurns === 5 && !cartridge.cabinetUnlocked) {
+                 updatedHistory.push({
+                     role: 'system' as const,
+                     content: "🔒 CABINET FOUND. Enter code to unlock +15 credits.\nHint: Use '/cabi " + SECRET_CODE + "'"
+                 });
+            }
+
+            // 5. Deep merge the updates
             const nextState = updateCartridgeProgress(tempState, {
                 ...result.updatedCartridge,
-                chatHistory: [...newHistory, { role: 'model', content: result.text }]
+                chatHistory: updatedHistory
             });
             
             onUpdate(nextState);
+
+            // 6. Check for Critical Network Error
+            if (result.error === 'NETWORK_BLOCK' && onNetworkError) {
+                onNetworkError();
+            }
             
         } catch (e) {
             console.error(e);
@@ -173,7 +237,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
 
     const handleExport = () => {
         if (!user) {
-            setShowLoginModal(true);
+            setShowRechargeModal(true);
             return;
         }
         const code = generatePythonAgent(cartridge);
@@ -184,54 +248,83 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
 
     const isQActive = (q: string) => activeQuadrant === q || activeQuadrant === 'ALL';
 
+    // Helper for input placeholder text
+    const getPlaceholder = () => {
+        if (cartridge.credits < 1.0) return "RECHARGE REQUIRED";
+        if (isNameUndefined) return "Enter your name...";
+        if (isTechMode) return "Describe technical requirements...";
+        if (isSetupPhase) return "Describe Hero/Villain...";
+        return "Command Ambika...";
+    };
+
+    // --- MESSAGE RENDERER (Markdown -> HTML) ---
+    const renderMessageContent = (text: string) => {
+        const parts = text.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return (
+                    <strong key={index} className="font-display tracking-wider text-[var(--accent-topaz-500)]">
+                        {part.slice(2, -2)}
+                    </strong>
+                );
+            }
+            return part;
+        });
+    };
+
     return (
         <div className="h-full w-full flex flex-col md:flex-row gap-4 relative">
             
-            {/* LOGIN MODAL (PAYWALL/AUTH) */}
-            {showLoginModal && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-[var(--bg-void)]/90 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="cartridge-slot p-8 max-w-md w-full text-center border-[var(--accent-topaz-500)] shadow-[0_0_50px_rgba(245,158,11,0.3)]">
-                        <h2 className="font-display text-4xl text-[var(--text-primary)] mb-2">ACCESS REQUIRED</h2>
+            {/* RECHARGE MODAL (PAYWALL) */}
+            {showRechargeModal && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-[var(--bg-void)]/95 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="cartridge-slot p-8 max-w-lg w-full text-center border-[var(--accent-topaz-500)] shadow-[0_0_50px_rgba(245,158,11,0.3)]">
+                        <h2 className="font-display text-4xl text-[var(--text-primary)] mb-2">
+                            {isLowCredits ? "ENERGY DEPLETED" : "IDENTITY REQUIRED"}
+                        </h2>
                         <p className="font-mono text-xs text-[var(--accent-ruby-500)] mb-6 tracking-widest">
-                            {isLowCredits ? "INSUFFICIENT COMPUTING CREDITS" : "IDENTITY VERIFICATION NEEDED"}
+                            {isLowCredits ? "CONTINUE THE RAID:" : "CREATE ACCOUNT TO SAVE:"}
                         </p>
                         
                         {!user ? (
                             <div className="space-y-4">
-                                <p className="text-[var(--text-secondary)] mb-4">
-                                    Create a secure identity to save your workspace and unlock 20 free credits.
-                                </p>
                                 <button 
                                     onClick={handleLogin}
-                                    className="w-full py-4 bg-[var(--accent-amethyst-500)] text-[var(--text-inverse)] font-display text-xl tracking-widest hover:bg-[var(--accent-amethyst-700)] transition-colors rounded"
+                                    className="w-full py-4 bg-[var(--accent-amethyst-500)] text-[var(--text-inverse)] font-display text-xl tracking-widest hover:bg-[var(--accent-amethyst-700)] transition-colors rounded shadow-[var(--shadow-glow-amethyst)]"
                                 >
                                     LOGIN WITH GOOGLE
                                 </button>
+                                <p className="text-[var(--text-secondary)] text-xs">
+                                    Secure your workspace & restore 20 credits.
+                                </p>
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                <p className="text-[var(--text-secondary)] mb-4">
-                                    You have depleted your free allocation.
-                                </p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <a 
-                                        href="https://buy.stripe.com/test_..." 
-                                        target="_blank" 
-                                        className="py-4 border border-[var(--accent-topaz-500)] text-[var(--accent-topaz-500)] font-mono text-xs flex flex-col items-center justify-center hover:bg-[var(--accent-topaz-500)] hover:text-white transition-colors rounded"
-                                    >
-                                        <span className="text-xl font-bold mb-1">50 CREDITS</span>
-                                        <span>$5.00 USD</span>
-                                    </a>
-                                    <a 
-                                        href="https://calendly.com/indradeva" 
-                                        target="_blank" 
-                                        className="py-4 border border-[var(--accent-emerald-500)] text-[var(--accent-emerald-500)] font-mono text-xs flex flex-col items-center justify-center hover:bg-[var(--accent-emerald-500)] hover:text-white transition-colors rounded"
-                                    >
-                                        <span className="text-xl font-bold mb-1">SESSION</span>
-                                        <span>€50.00 / HR</span>
-                                    </a>
-                                </div>
-                                <button onClick={() => setShowLoginModal(false)} className="text-[var(--text-muted)] text-xs mt-4 hover:text-[var(--text-primary)]">
+                            <div className="grid grid-cols-1 gap-4">
+                                {/* ARCADE TIER */}
+                                <a href="#" className="p-4 border border-[var(--accent-topaz-500)] bg-[var(--accent-topaz-500)]/10 rounded hover:bg-[var(--accent-topaz-500)]/20 transition-all flex items-center justify-between group">
+                                    <div className="text-left">
+                                        <div className="font-bold text-[var(--accent-topaz-500)] group-hover:text-white">ARCADE MODE</div>
+                                        <div className="text-[10px] text-[var(--text-secondary)]">Pay-as-you-play</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="font-mono text-xl font-bold text-white">€0.99</div>
+                                        <div className="text-[10px] text-[var(--text-muted)]">10 CREDITS</div>
+                                    </div>
+                                </a>
+
+                                {/* BOSS RAID TIER */}
+                                <a href="https://calendly.com/indradeva" target="_blank" className="p-4 border border-[var(--accent-ruby-500)] bg-[var(--accent-ruby-500)]/10 rounded hover:bg-[var(--accent-ruby-500)]/20 transition-all flex items-center justify-between group">
+                                    <div className="text-left">
+                                        <div className="font-bold text-[var(--accent-ruby-500)] group-hover:text-white flex items-center gap-2">BOSS RAID <span>⚔️</span></div>
+                                        <div className="text-[10px] text-[var(--text-secondary)]">Co-Op with Indra</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="font-mono text-xl font-bold text-white">€50.00</div>
+                                        <div className="text-[10px] text-[var(--text-muted)]">PER HOUR</div>
+                                    </div>
+                                </a>
+
+                                <button onClick={() => setShowRechargeModal(false)} className="text-[var(--text-muted)] text-xs mt-2 hover:text-[var(--text-primary)]">
                                     CANCEL
                                 </button>
                             </div>
@@ -240,12 +333,12 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
                 </div>
             )}
 
-            {/* LEFT: VISUALIZER (Unchanged layout, just wiring) */}
+            {/* LEFT: VISUALIZER (CONTEXT-AWARE) */}
             <div className="w-full md:w-1/3 flex flex-col gap-2 h-[300px] md:h-auto shrink-0 transition-all duration-700">
                 {/* Header Stats */}
                 <div className="flex justify-between items-center px-1 font-mono text-[10px] text-[var(--text-muted)]">
                     <span className="flex items-center gap-2">
-                        ENERGY: <span className="text-[var(--accent-emerald-500)]">{cartridge.credits.toFixed(1)}</span>
+                        ENERGY: <span className={`font-bold ${cartridge.credits < 5 ? 'text-[var(--accent-ruby-500)] animate-pulse' : 'text-[var(--accent-emerald-500)]'}`}>{cartridge.credits.toFixed(1)}</span>
                         {user && <span className="text-[var(--accent-sapphire-500)]">[{user.displayName?.split(' ')[0]}]</span>}
                     </span>
                     <span>TENSION: <span className="text-[var(--accent-ruby-500)]">{cartridge.tension}%</span></span>
@@ -253,85 +346,88 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
 
                 {/* THE CANVAS */}
                 <div className="flex-1 relative border-2 border-[var(--line-soft)] rounded bg-[var(--bg-void)] overflow-hidden">
-                    {/* ... (Existing Visualization Logic for Hero/Villain/Quadrants) ... */}
-                    {isSetupPhase ? (
-                        <div className="absolute inset-0 flex flex-row animate-in fade-in duration-500">
-                            {/* HERO COLUMN */}
-                            <div className="flex-1 border-r border-[var(--line-soft)] flex flex-col items-center justify-start pt-10 p-4 relative group hover:bg-[var(--accent-emerald-500)]/5 transition-colors">
-                                <div className="w-full mb-2 text-left px-2">
-                                    <h3 className="font-display text-xl md:text-2xl text-[var(--accent-emerald-500)] tracking-wider opacity-50 group-hover:opacity-100 transition-opacity">HERO</h3>
-                                </div>
-                                <div className="w-24 h-32 md:w-32 md:h-40 border-2 border-dashed border-[var(--accent-emerald-500)] rounded flex flex-col items-center justify-center bg-[var(--bg-surface)]/50 overflow-hidden relative">
-                                    <span className="text-2xl opacity-50">🛡️</span>
-                                    <span className="text-[8px] font-mono mt-2 text-[var(--accent-emerald-500)]">DRIVER</span>
-                                </div>
-                                <p className="font-mono text-[10px] text-center text-[var(--text-primary)] mt-4 px-2 leading-tight">
-                                    {cartridge.hero.description || "Who fights for you?"}
-                                </p>
-                            </div>
-
-                            {/* VILLAIN COLUMN */}
-                            <div className="flex-1 flex flex-col items-center justify-start pt-10 p-4 relative group hover:bg-[var(--accent-ruby-500)]/5 transition-colors">
-                                <div className="w-full mb-2 text-right px-2">
-                                    <h3 className="font-display text-xl md:text-2xl text-[var(--accent-ruby-500)] tracking-wider opacity-50 group-hover:opacity-100 transition-opacity">VILLAIN</h3>
-                                </div>
-                                <div className="w-24 h-32 md:w-32 md:h-40 border-2 border-dashed border-[var(--accent-ruby-500)] rounded flex flex-col items-center justify-center bg-[var(--bg-surface)]/50 overflow-hidden relative">
-                                    <span className="text-2xl opacity-50">⚔️</span>
-                                    <span className="text-[8px] font-mono mt-2 text-[var(--accent-ruby-500)]">BARRIER</span>
-                                </div>
-                                <p className="font-mono text-[10px] text-center text-[var(--text-primary)] mt-4 px-2 leading-tight">
-                                    {cartridge.villain.description || "What blocks you?"}
-                                </p>
-                            </div>
-                        </div>
+                    {/* MODE A: TECH TASK VISUALIZER */}
+                    {isTechMode ? (
+                        <ManifestVisualizer cartridge={cartridge} />
                     ) : (
-                        /* MODE B: 4-QUADRANTS (Execution Phase) */
-                        <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-1 bg-[var(--bg-void)] p-1 animate-in fade-in zoom-in duration-1000">
-                             {/* Strategy */}
-                             <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-emerald-500)]/30 bg-[var(--accent-emerald-500)]/5 ${isQActive('strategy') ? 'bg-[var(--accent-emerald-500)]/20 border-[var(--accent-emerald-500)] scale-[0.98]' : 'hover:border-[var(--accent-emerald-500)]/60'}`}>
-                                 <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-emerald-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.strategy.level}%`}}></div>
-                                 <span className="text-[var(--accent-emerald-500)] font-mono text-[10px] font-bold tracking-widest absolute top-2 left-2">STRATEGY</span>
-                                 {isSystematizing && <span className="absolute inset-0 flex items-center justify-center text-[var(--accent-emerald-500)] animate-pulse text-xs font-mono">SCANNING...</span>}
-                             </div>
-                             {/* Creative */}
-                             <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-amethyst-500)]/30 bg-[var(--accent-amethyst-500)]/5 ${isQActive('creative') ? 'bg-[var(--accent-amethyst-500)]/20 border-[var(--accent-amethyst-500)] scale-[0.98]' : 'hover:border-[var(--accent-amethyst-500)]/60'}`}>
-                                 <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-amethyst-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.creative.level}%`}}></div>
-                                 <span className="text-[var(--accent-amethyst-500)] font-mono text-[10px] font-bold tracking-widest absolute top-2 right-2">CREATIVE</span>
-                                 {isSystematizing && <span className="absolute inset-0 flex items-center justify-center text-[var(--accent-amethyst-500)] animate-pulse text-xs font-mono">SCANNING...</span>}
-                             </div>
-                             {/* Producing */}
-                             <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-sapphire-500)]/30 bg-[var(--accent-sapphire-500)]/5 ${isQActive('producing') ? 'bg-[var(--accent-sapphire-500)]/20 border-[var(--accent-sapphire-500)] scale-[0.98]' : 'hover:border-[var(--accent-sapphire-500)]/60'}`}>
-                                 <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-sapphire-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.producing.level}%`}}></div>
-                                 <span className="text-[var(--accent-sapphire-500)] font-mono text-[10px] font-bold tracking-widest absolute bottom-2 left-2">PRODUCING</span>
-                                 {isSystematizing && <span className="absolute inset-0 flex items-center justify-center text-[var(--accent-sapphire-500)] animate-pulse text-xs font-mono">SCANNING...</span>}
-                             </div>
-                             {/* Media */}
-                             <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-ruby-500)]/30 bg-[var(--accent-ruby-500)]/5 ${isQActive('media') ? 'bg-[var(--accent-ruby-500)]/20 border-[var(--accent-ruby-500)] scale-[0.98]' : 'hover:border-[var(--accent-ruby-500)]/60'}`}>
-                                 <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-ruby-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.media.level}%`}}></div>
-                                 <span className="text-[var(--accent-ruby-500)] font-mono text-[10px] font-bold tracking-widest absolute bottom-2 right-2">MEDIA</span>
-                                 {isSystematizing && <span className="absolute inset-0 flex items-center justify-center text-[var(--accent-ruby-500)] animate-pulse text-xs font-mono">SCANNING...</span>}
-                             </div>
-                        </div>
-                    )}
-                    
-                    {/* The Heart (Central Node) */}
-                    {!isNameUndefined && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto group">
-                             <div className="w-4 h-4 rounded-full bg-white border-2 border-[var(--bg-void)] shadow-[0_0_20px_white] transition-all"
-                                style={{ 
-                                    animation: isSetupPhase ? 'none' : `pulse ${1 / (0.5 + (cartridge.tension / 20))}s infinite ease-in-out`,
-                                    opacity: isSetupPhase ? 0.5 : 1,
-                                    transform: isSystematizing ? 'scale(1.5)' : 'scale(1)'
-                                }}
-                             ></div>
-                        </div>
+                        /* MODE B: GAME MODE (Setup & Quadrants) */
+                        <>
+                            {isSetupPhase ? (
+                                <div className="absolute inset-0 flex flex-row animate-in fade-in duration-500">
+                                    {/* HERO COLUMN */}
+                                    <div className="flex-1 border-r border-[var(--line-soft)] flex flex-col items-center justify-start pt-10 p-4 relative group hover:bg-[var(--accent-emerald-500)]/5 transition-colors">
+                                        <div className="w-full mb-2 text-left px-2">
+                                            <h3 className="font-display text-xl md:text-2xl text-[var(--accent-emerald-500)] tracking-wider opacity-50 group-hover:opacity-100 transition-opacity">HERO</h3>
+                                        </div>
+                                        <div className="w-24 h-32 md:w-32 md:h-40 border-2 border-dashed border-[var(--accent-emerald-500)] rounded flex flex-col items-center justify-center bg-[var(--bg-surface)]/50 overflow-hidden relative">
+                                            <span className="text-2xl opacity-50">🛡️</span>
+                                            <span className="text-[8px] font-mono mt-2 text-[var(--accent-emerald-500)]">DRIVER</span>
+                                        </div>
+                                        <p className="font-mono text-[10px] text-center text-[var(--text-primary)] mt-4 px-2 leading-tight">
+                                            {cartridge.hero.description || "Who fights for you?"}
+                                        </p>
+                                    </div>
+
+                                    {/* VILLAIN COLUMN */}
+                                    <div className="flex-1 flex flex-col items-center justify-start pt-10 p-4 relative group hover:bg-[var(--accent-ruby-500)]/5 transition-colors">
+                                        <div className="w-full mb-2 text-right px-2">
+                                            <h3 className="font-display text-xl md:text-2xl text-[var(--accent-ruby-500)] tracking-wider opacity-50 group-hover:opacity-100 transition-opacity">VILLAIN</h3>
+                                        </div>
+                                        <div className="w-24 h-32 md:w-32 md:h-40 border-2 border-dashed border-[var(--accent-ruby-500)] rounded flex flex-col items-center justify-center bg-[var(--bg-surface)]/50 overflow-hidden relative">
+                                            <span className="text-2xl opacity-50">⚔️</span>
+                                            <span className="text-[8px] font-mono mt-2 text-[var(--accent-ruby-500)]">BARRIER</span>
+                                        </div>
+                                        <p className="font-mono text-[10px] text-center text-[var(--text-primary)] mt-4 px-2 leading-tight">
+                                            {cartridge.villain.description || "What blocks you?"}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* MODE B: 4-QUADRANTS (Execution Phase) */
+                                <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-1 bg-[var(--bg-void)] p-1 animate-in fade-in zoom-in duration-1000">
+                                     {/* Strategy */}
+                                     <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-emerald-500)]/30 bg-[var(--accent-emerald-500)]/5 ${isQActive('strategy') ? 'bg-[var(--accent-emerald-500)]/20 border-[var(--accent-emerald-500)] scale-[0.98]' : 'hover:border-[var(--accent-emerald-500)]/60'}`}>
+                                         <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-emerald-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.strategy.level}%`}}></div>
+                                         <span className="text-[var(--accent-emerald-500)] font-mono text-[10px] font-bold tracking-widest absolute top-2 left-2">STRATEGY</span>
+                                     </div>
+                                     {/* Creative */}
+                                     <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-amethyst-500)]/30 bg-[var(--accent-amethyst-500)]/5 ${isQActive('creative') ? 'bg-[var(--accent-amethyst-500)]/20 border-[var(--accent-amethyst-500)] scale-[0.98]' : 'hover:border-[var(--accent-amethyst-500)]/60'}`}>
+                                         <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-amethyst-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.creative.level}%`}}></div>
+                                         <span className="text-[var(--accent-amethyst-500)] font-mono text-[10px] font-bold tracking-widest absolute top-2 right-2">CREATIVE</span>
+                                     </div>
+                                     {/* Producing */}
+                                     <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-sapphire-500)]/30 bg-[var(--accent-sapphire-500)]/5 ${isQActive('producing') ? 'bg-[var(--accent-sapphire-500)]/20 border-[var(--accent-sapphire-500)] scale-[0.98]' : 'hover:border-[var(--accent-sapphire-500)]/60'}`}>
+                                         <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-sapphire-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.producing.level}%`}}></div>
+                                         <span className="text-[var(--accent-sapphire-500)] font-mono text-[10px] font-bold tracking-widest absolute bottom-2 left-2">PRODUCING</span>
+                                     </div>
+                                     {/* Media */}
+                                     <div className={`relative p-2 border rounded transition-all duration-500 border-[var(--accent-ruby-500)]/30 bg-[var(--accent-ruby-500)]/5 ${isQActive('media') ? 'bg-[var(--accent-ruby-500)]/20 border-[var(--accent-ruby-500)] scale-[0.98]' : 'hover:border-[var(--accent-ruby-500)]/60'}`}>
+                                         <div className="absolute bottom-0 left-0 w-full bg-[var(--accent-ruby-500)]/20 transition-all duration-1000 ease-out" style={{height: `${cartridge.quadrants.media.level}%`}}></div>
+                                         <span className="text-[var(--accent-ruby-500)] font-mono text-[10px] font-bold tracking-widest absolute bottom-2 right-2">MEDIA</span>
+                                     </div>
+                                </div>
+                            )}
+                            
+                            {/* The Heart (Central Node) - Only Game Mode */}
+                            {!isNameUndefined && (
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto group">
+                                     <div className="w-4 h-4 rounded-full bg-white border-2 border-[var(--bg-void)] shadow-[0_0_20px_white] transition-all"
+                                        style={{ 
+                                            animation: isSetupPhase ? 'none' : `pulse ${1 / (0.5 + (cartridge.tension / 20))}s infinite ease-in-out`,
+                                            opacity: isSetupPhase ? 0.5 : 1,
+                                            transform: isSystematizing ? 'scale(1.5)' : 'scale(1)'
+                                        }}
+                                     ></div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
                 
                 {/* Status Bar */}
                 <div className="h-8 border border-[var(--line-soft)] rounded flex items-center justify-center bg-[var(--bg-surface)]">
                     <span className="font-mono text-[10px] text-[var(--text-secondary)] animate-pulse tracking-widest">
-                        {isSystematizing ? "INDRA: SYSTEMATIZING..." : (isThinking ? "AMBIKA: ANALYZING..." : "AMBIKA: LISTENING")}
+                        {isSystematizing ? "INDRA: SYSTEMATIZING..." : (isThinking ? "AMBIKA: ANALYZING..." : (isTechMode ? "AMBIKA: ARCHITECTING" : "AMBIKA: LISTENING"))}
                     </span>
                 </div>
             </div>
@@ -347,7 +443,8 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
                                 : (msg.role === 'system' ? 'bg-[var(--accent-topaz-500)]/10 border border-[var(--accent-topaz-500)] text-[var(--accent-topaz-500)]' : 'bg-[var(--bg-surface)] border border-[var(--line-soft)] text-[var(--text-secondary)]')
                             }`}>
                                 {msg.role === 'model' && <span className="text-[9px] text-[var(--accent-topaz-500)] block mb-1 tracking-widest uppercase">Ambika</span>}
-                                <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                {msg.role === 'system' && <span className="text-[9px] text-[var(--accent-emerald-500)] block mb-1 tracking-widest uppercase">System</span>}
+                                <p className="whitespace-pre-wrap leading-relaxed">{renderMessageContent(msg.content)}</p>
                             </div>
                         </div>
                     ))}
@@ -367,7 +464,8 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
                 {/* Action Buttons */}
                 {!isSetupPhase && (
                     <div className="absolute top-4 right-4 flex gap-2">
-                         {cartridge.quadrants.strategy.level > 0 && (
+                         {/* Only show Arcade button in Game Mode */}
+                         {!isTechMode && cartridge.quadrants.strategy.level > 0 && (
                              <button 
                                 onClick={handleEnterArcade}
                                 className="bg-[var(--bg-surface)] border border-[var(--accent-topaz-500)] text-[var(--accent-topaz-500)] px-3 py-1 text-xs font-mono rounded hover:bg-[var(--accent-topaz-500)] hover:text-white transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)] animate-pulse"
@@ -398,7 +496,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme }) => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder={cartridge.credits < 1.0 ? "RECHARGE REQUIRED" : (isNameUndefined ? "Enter your name..." : (isSetupPhase ? "Describe Hero/Villain..." : "Command Ambika..."))}
+                        placeholder={getPlaceholder()}
                         disabled={isThinking || cartridge.credits < 1.0}
                         className="flex-1 bg-[var(--bg-void)] border border-[var(--line-soft)] rounded px-3 py-2 text-sm font-mono focus:border-[var(--accent-amethyst-500)] focus:outline-none text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                         autoFocus

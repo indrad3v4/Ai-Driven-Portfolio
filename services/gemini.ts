@@ -1,9 +1,8 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, Tool } from "@google/genai";
 import { InsightCartridge, QuadrantData } from "../lib/insight-object";
 import { analyzeInsight } from "../lib/framework-database";
 
@@ -251,6 +250,7 @@ export async function generateLevelRecap(
 export interface SystematizationResponse {
     text: string;
     updatedCartridge: Partial<InsightCartridge>;
+    error?: 'NETWORK_BLOCK';
 }
 
 /**
@@ -305,14 +305,164 @@ export async function chatWithManagerAgent(
 ): Promise<SystematizationResponse> {
     const ai = createAIClient();
     
-    // Calculate derived context
+    // Check mode
+    const isTechMode = currentCartridge.mode === 'TECH_TASK';
     const userName = currentCartridge.userName || "UNDEFINED";
+
+    // HISTORY REPLAY (Limit to last 6 for context window efficiency)
+    const historyContents = currentCartridge.chatHistory.slice(-6).map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+    }));
+
+    // --- MODE A: TECH TASK (MANIFEST) ---
+    if (isTechMode) {
+        const task = currentCartridge.techTask!;
+        const turnCount = currentCartridge.chatHistory.filter(m => m.role === 'user').length;
+        
+        // TURN 0: HANDSHAKE - GREETING
+        // SystemWorkspace sends "Initialize Ambika." automatically at start.
+        if (userMessage === "Initialize Ambika.") {
+             return {
+                 text: "Identity Protocol Initiated. I am Ambika, your Solutions Architect.\n\nTo align my neural networks with your vision, please state your **Name** and provide a **URL/Link** to your existing project or reference material (if any).",
+                 updatedCartridge: {}
+             };
+        }
+
+        let systemPrompt = '';
+        
+        // TURN 1: HANDSHAKE - PROTOCOL EXPLANATION
+        if (turnCount === 1) {
+            systemPrompt = `
+             CONTEXT: User has just provided their Name and optionally a Link to their project.
+             
+             CRITICAL IDENTITY & GROUNDING RULES:
+             1. **SELF-RECOGNITION**: If the provided URL is "indra-ai.dev" (or similar), recognize that the user is talking about **YOU** (this specific AI System Builder platform). Respond with meta-awareness (e.g., "Ah, you are working on *Me*?" or "Recursion detected. We are analyzing this very system.").
+             2. **ZERO-TRUST**: If Google Search returns generic results or results for a different company (e.g. "Indra Energy" instead of "Indra AI"), **DO NOT HALLUCINATE** features. Simply state: "I see the link, but public data seems generic. Tell me YOUR vision."
+
+             TASK:
+             1. **ANALYZE**: If a link/URL is found in the user's message, use Google Search to gain context. Apply the Rules above.
+             2. **ACKNOWLEDGE**: Briefly acknowledge their project or name intelligently.
+             3. **EXPLAIN PROTOCOL**: Explain that we will cover 5 phases: General Info, Tech Stack, Structure, Roles, and Admin.
+             4. **EXPLAIN ECONOMY**: "You have 5 initial energy units. Once depleted, I will provide a Cabinet Code (/cabi) to unlock 15 more units for deep architectural work. If you need more time, you can top up."
+             5. **EXPLAIN OUTCOME**: "At the end, I will generate a Cost & Time Estimate. You can then Lock the Slot (50% prepay) or Request a Call."
+             6. **ASSURANCE**: "If you are unsure of any technical details, ask me. I am here to consult, not just record."
+             7. **ACTION**: Ask the first question for GENERAL INFO: "What is the high-level goal of this system?"
+             
+             PERSONA: You are a helpful, professional, but slightly sci-fi Solutions Architect. Warm but precise. Use bolding (**text**) for key terms.
+
+             OUTPUT FORMAT: JSON
+             {
+               "response": "...",
+               "updates": {}
+             }
+            `;
+        } else {
+            // TURN 2+: STANDARD MANIFEST LOOP
+            systemPrompt = `
+            IDENTITY:
+            You are AMBIKA, a Senior Solutions Architect.
+            Your goal is to guide the user through creating a Technical Specification Manifest.
+            
+            CURRENT MANIFEST STATE:
+            - GENERAL INFO: ${task.generalInfo.status} (${task.generalInfo.content})
+            - TECH STACK: ${task.techStack.status} (${task.techStack.content})
+            - STRUCTURE: ${task.structure.status} (${task.structure.content})
+            - ROLES: ${task.roles.status} (${task.roles.content})
+            - ADMIN: ${task.admin.status} (${task.admin.content})
+            
+            REQUIRED SUB-FIELDS FOR COMPLETION:
+            - **GENERAL INFO**: Must cover [1. High-Level Goal, 2. Target Audience, 3. Success Metrics].
+            - **TECH STACK**: Must cover [1. Languages, 2. Frameworks, 3. Integrations/APIs].
+            - **STRUCTURE**: Must cover [1. Database Schema, 2. Core API Endpoints, 3. User Flows].
+            - **ROLES**: Must cover [1. User Types, 2. Permissions/Access Levels].
+            - **ADMIN**: Must cover [1. CMS/Dashboard Needs, 2. Analytics].
+
+            INSTRUCTIONS:
+            1. Guide them sequentially. 
+            2. **STRICT COMPLETION CHECK**: Do NOT mark a section as DONE until you have information for ALL its sub-fields. If the user answers partially, ask follow-up questions for the missing parts.
+               - Example: If user gives Goal but not Audience, ask "Who is this system for?" before moving to Tech Stack.
+            3. Be precise, technical, and structured. No "Hero/Villain" metaphors here. Use "Project/Bottleneck".
+            4. When all sections are DONE, estimate the effort (Hours) and Cost (€50/hr).
+            
+            JSON OUTPUT FORMAT:
+            {
+              "response": "Your next question or confirmation...",
+              "updates": {
+                "techTask": {
+                   "generalInfo": { "status": "IN_PROGRESS" | "DONE", "content": "Summary of collected info..." },
+                   // ... update other sections as needed
+                   "estimation": { "hours": 10, "cost": 500, "locked": false } // Only when finished
+                }
+              }
+            }
+            `;
+        }
+
+        try {
+             // Always enable search for Tech Task to allow consulting
+             const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [
+                    ...historyContents,
+                    { role: 'user', parts: [{ text: userMessage }] }
+                ],
+                config: {
+                    systemInstruction: systemPrompt,
+                    // responseMimeType: "application/json", // REMOVED: Unsuppported with Tools
+                    tools: [{ googleSearch: {} }] 
+                }
+            });
+            
+            const rawText = response.text || "{}";
+            
+            // Clean up Markdown code blocks if present
+            const cleanJson = (text: string) => {
+                const match = text.match(/```json([\s\S]*?)```/);
+                if (match) return match[1];
+                return text.replace(/```/g, ''); // Fallback cleaning
+            };
+
+            let parsed;
+            try {
+                parsed = JSON.parse(cleanJson(rawText));
+            } catch (e) {
+                // Fallback: If model didn't return JSON (e.g. it just chatted), 
+                // wrap the text as the response and assume no updates.
+                console.warn("JSON Parse failed in Tech Mode, using raw text", e);
+                parsed = { 
+                    response: rawText, 
+                    updates: {} 
+                };
+            }
+            
+            return {
+                text: parsed.response || rawText, 
+                updatedCartridge: parsed.updates || {}
+            };
+        } catch(e: any) {
+             console.error("Tech Task Agent Failed", e);
+             
+             // Check for 403 Forbidden which implies Social Browser Blocking
+             if (e.message?.includes('403') || e.status === 403 || e.toString().includes('403')) {
+                 return {
+                     text: "⚠️ **SIGNAL JAMMED.**\n\n[SOCIAL_BROWSER_DETECTED]. The API uplink was severed by the in-app browser policy.\n\n**CRITICAL ACTION:** Tap the menu (•••) and select **OPEN IN BROWSER**.",
+                     updatedCartridge: {},
+                     error: 'NETWORK_BLOCK'
+                 };
+             }
+
+             return { text: "Spec generation error.", updatedCartridge: {} };
+        }
+    }
+
+    // --- MODE B: GAME MODE (HERO/VILLAIN) ---
+    
     const heroDesc = currentCartridge.hero.description || "UNDEFINED";
     const villainDesc = currentCartridge.villain.description || "UNDEFINED";
     const tension = currentCartridge.tension;
 
     // PHASE 1: RESEARCH (Grounding)
-    // Only search if we have enough context or if the user asks a substantive question.
     let searchGrounding = "";
     if (userMessage.length > 3) {
         const researchResult = await performResearchPhase(userMessage, heroDesc, villainDesc);
@@ -337,13 +487,6 @@ export async function chatWithManagerAgent(
         `;
     }
 
-    // HISTORY REPLAY (Limit to last 6 for context window efficiency)
-    const historyContents = currentCartridge.chatHistory.slice(-6).map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-    }));
-
-    // PHASE 2: SYNTHESIS (JSON Output)
     // SYSTEM PROMPT: AMBIKA PERSONA
     let systemPrompt = `
     [CURRENT STATE]
@@ -439,8 +582,20 @@ export async function chatWithManagerAgent(
             updatedCartridge: parsed.updates || {}
         };
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Agent Interaction Failed", e);
+        
+        // --- TRIZ SOLUTION: DIEGETIC ERROR HANDLING ---
+        // If we detect a 403 Forbidden (likely Referrer check failure due to Social WebView),
+        // we provide a specific, actionable error message to the user AND trigger the component escalation.
+        if (e.message?.includes('403') || e.status === 403 || e.toString().includes('403')) {
+             return {
+                text: "⚠️ **SIGNAL INTERFERENCE DETECTED**\n\nAmbika connection blocked by social media browser protocols (Referrer Policy).\n\n**FIX:** Tap the '...' menu in the top right and select **OPEN IN BROWSER** (Safari/Chrome) to re-establish the Neural Link.",
+                updatedCartridge: {},
+                error: 'NETWORK_BLOCK'
+            };
+        }
+
         return {
             text: "Ambika Connection Interrupted. Please retry.",
             updatedCartridge: {}
@@ -458,6 +613,13 @@ export async function systematizeInsight(
 ): Promise<Partial<InsightCartridge>> {
     const ai = createAIClient();
     
+    // Switch systematization logic based on mode
+    if (cartridge.mode === 'TECH_TASK') {
+        // TECH TASK SYSTEMATIZATION (Final Polish/Estimation)
+        // ... implementation for final tech task refinement if needed
+        return {}; 
+    }
+
     const hero = cartridge.hero.description;
     const villain = cartridge.villain.description;
     const name = cartridge.userName;
