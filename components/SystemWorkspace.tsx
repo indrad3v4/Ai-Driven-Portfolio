@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { InsightCartridge, updateCartridgeProgress } from '../lib/insight-object';
-import { chatWithManagerAgent, systematizeInsight } from '../services/gemini';
+import { chatWithManagerAgent, systematizeInsight, generateNanoBananaImage } from '../services/gemini';
 import { generatePythonAgent, generateReadme, triggerDownload } from '../lib/system-serializer';
 import { loginWithGoogle, logout, saveWorkspace, deductCredit, UserProfile, subscribeToAuth } from '../services/auth-service';
 import RetroButton from './RetroButton';
@@ -47,6 +47,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
     const CABI_PREFIX = "/cabi";
     const SECRET_CODE = "TZ_abc123xyz"; // Standard unlock code
     const ADMIN_HASH = "esCDtT#1mwHLn@qHEjne"; // Admin hash
+    const NANOBANANA_CMD = "/generate-og";
 
     // Listen to Auth
     useEffect(() => {
@@ -129,6 +130,42 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
 
         const isSystemTrigger = textToSend === "SYSTEM_START";
         
+        // --- ADMIN: NANOBANANA GENERATION ---
+        if (textToSend === NANOBANANA_CMD) {
+            setInput('');
+            setIsThinking(true);
+            
+            // Add user message
+            const tempState = updateCartridgeProgress(cartridge, {
+                chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }]
+            });
+            onUpdate(tempState);
+
+            try {
+                // Call Generation
+                const result = await generateNanoBananaImage();
+                const imageUrl = `data:${result.mimeType};base64,${result.data}`;
+                
+                // Add system response with image
+                const successState = updateCartridgeProgress(tempState, {
+                    chatHistory: [...tempState.chatHistory, { 
+                        role: 'system' as const, 
+                        content: `🍌 **NANOBANANA PROTOCOL COMPLETE.**\n\nCanonical Identity Generated.\n\n![Indra-AI Identity](${imageUrl})\n\n[RIGHT CLICK TO SAVE AS og-image.png]`
+                    }]
+                });
+                onUpdate(successState);
+            } catch (e) {
+                console.error("NanoBanana failed", e);
+                const errorState = updateCartridgeProgress(tempState, {
+                    chatHistory: [...tempState.chatHistory, { role: 'system' as const, content: "⚠️ PROTOCOL FAILED. CHECK CONSOLE." }]
+                });
+                onUpdate(errorState);
+            } finally {
+                setIsThinking(false);
+            }
+            return;
+        }
+
         // --- CABINET/ADMIN UNLOCK LOGIC ---
         if (textToSend.startsWith(CABINET_CODE_PREFIX) || textToSend.startsWith(CABI_PREFIX)) {
             const parts = textToSend.split(' ');
@@ -138,7 +175,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
             if (code === ADMIN_HASH) {
                 onAdminGrant();
                 const nextState = updateCartridgeProgress(cartridge, {
-                    chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "👁️ OMNISCIENCE GRANTED." }]
+                    chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "👁️ OMNISCIENCE GRANTED.\n\nAdmin Commands:\n- /generate-og (Trigger NanoBanana Protocol)" }]
                 });
                 onUpdate(nextState);
                 setInput('');
@@ -287,13 +324,23 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
 
     // --- MESSAGE RENDERER (Markdown -> HTML) ---
     const renderMessageContent = (text: string) => {
-        const parts = text.split(/(\*\*.*?\*\*)/g);
+        const parts = text.split(/(\*\*.*?\*\*|!\[.*?\]\(.*?\))/g);
         return parts.map((part, index) => {
             if (part.startsWith('**') && part.endsWith('**')) {
                 return (
                     <strong key={index} className="font-display tracking-wider text-[var(--accent-topaz-500)]">
                         {part.slice(2, -2)}
                     </strong>
+                );
+            }
+            // Image Renderer for NanoBanana
+            if (part.startsWith('![') && part.includes('](')) {
+                const alt = part.match(/!\[(.*?)\]/)?.[1] || "Generated Image";
+                const src = part.match(/\((.*?)\)/)?.[1] || "";
+                return (
+                    <div key={index} className="my-4 border-2 border-[var(--accent-topaz-500)] rounded overflow-hidden shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+                        <img src={src} alt={alt} className="w-full h-auto object-cover" />
+                    </div>
                 );
             }
             return part;
@@ -472,7 +519,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                             }`}>
                                 {msg.role === 'model' && <span className="text-[9px] text-[var(--accent-topaz-500)] block mb-1 tracking-widest uppercase">Ambika</span>}
                                 {msg.role === 'system' && <span className="text-[9px] text-[var(--accent-emerald-500)] block mb-1 tracking-widest uppercase">System</span>}
-                                <p className="whitespace-pre-wrap leading-relaxed">{renderMessageContent(msg.content)}</p>
+                                <div className="whitespace-pre-wrap leading-relaxed">{renderMessageContent(msg.content)}</div>
                             </div>
                         </div>
                     ))}

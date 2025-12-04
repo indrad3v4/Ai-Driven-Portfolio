@@ -77,6 +77,36 @@ export const generateMetaTags = (meta: SEOMeta) => {
 };
 
 /**
+ * Update DOM meta tags dynamically (Client-side SEO)
+ */
+export const applyDOMMetaTags = (tags: { name?: string; property?: string; content: string }[]) => {
+  if (typeof document === 'undefined') return;
+
+  tags.forEach(tag => {
+    let element: HTMLMetaElement | null = null;
+    if (tag.name) {
+      element = document.querySelector(`meta[name="${tag.name}"]`);
+      if (!element) {
+        element = document.createElement('meta');
+        element.setAttribute('name', tag.name);
+        document.head.appendChild(element);
+      }
+    } else if (tag.property) {
+      element = document.querySelector(`meta[property="${tag.property}"]`);
+      if (!element) {
+        element = document.createElement('meta');
+        element.setAttribute('property', tag.property);
+        document.head.appendChild(element);
+      }
+    }
+    
+    if (element) {
+      element.setAttribute('content', tag.content);
+    }
+  });
+};
+
+/**
  * Generate Organization JSON-LD schema
  * Tells AI search engines who you are
  */
@@ -170,6 +200,8 @@ export const injectJsonLd = (schema: object, scriptId: string = 'json-ld') => {
   console.log(`[SEO] JSON-LD schema injected (${scriptId})`);
 };
 
+const DEFAULT_IMAGE = 'https://indra-ai.dev/og-image.png';
+
 /**
  * Page-specific SEO config
  */
@@ -178,6 +210,7 @@ export const PAGE_SEO_CONFIG = {
     title: 'Indra-AI: Ship AI Systems in 2 Weeks',
     description:
       'We ship working AI systems in 2 weeks, not 6 months. Built for early-stage products, internal tools, and builders who need clarity.',
+    ogImage: DEFAULT_IMAGE,
     keywords: [
       'AI systems',
       'product development',
@@ -192,6 +225,7 @@ export const PAGE_SEO_CONFIG = {
     title: 'INSERT MIND: The AI System Builder Game',
     description:
       'Join Ambika in an interactive journey to architect your AI system. Learn game design + strategic thinking through narrative gameplay.',
+    ogImage: DEFAULT_IMAGE,
     keywords: [
       'game design',
       'AI architecture',
@@ -205,6 +239,7 @@ export const PAGE_SEO_CONFIG = {
     title: 'Raid Victories: Indra-AI Projects',
     description:
       'See the systems we shipped. Real products, real impact, real speed. Your next success story starts here.',
+    ogImage: DEFAULT_IMAGE,
     keywords: [
       'portfolio',
       'case studies',

@@ -1,12 +1,10 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { InsightCartridge } from "../lib/insight-object";
-import { analyzeInsight } from "../lib/framework-database";
-import { callGeminiViaProxy } from "./geminiProxy";
+import { LevelStats } from "../types";
 
 // Ensure API key is present
 if (!process.env.API_KEY) {
@@ -128,8 +126,9 @@ export async function generateArcadeSprite(
   let lastError;
   for (let i = 0; i < 3; i++) {
     try {
+      // Using Flash Image for stability and speed
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: {
           parts: [
             { inlineData: { data: imageBase64, mimeType: mimeType } },
@@ -172,8 +171,9 @@ export async function generateBattleScene(
     Use heavy black ink outlines, halftones, and bold vintage colors.`;
   
     try {
+      // Using Flash Image for stability
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: {
           parts: [
             { inlineData: { data: heroImageB64, mimeType: 'image/png' } },
@@ -188,394 +188,157 @@ export async function generateBattleScene(
     
       const part = response.candidates?.[0]?.content?.parts?.[0];
       if (part && part.inlineData && part.inlineData.data) {
-        return {
-          data: part.inlineData.data,
-          mimeType: part.inlineData.mimeType || 'image/png',
-        };
+          return {
+              data: part.inlineData.data,
+              mimeType: part.inlineData.mimeType || 'image/png',
+          };
       }
+      throw new Error("No image generated.");
     } catch (e) {
-       console.error("Battle scene generation failed", e);
-       throw e;
+        console.error("Battle scene generation failed", e);
+        throw e;
     }
 }
 
 export async function generateLevelRecap(
-    stats: any, 
-    heroImageB64: string | null,
+    stats: LevelStats,
+    playerImageB64: string | null,
     villainImageB64: string | null
-  ): Promise<{ data: string; mimeType: string }> {
+): Promise<{ data: string; mimeType: string }> {
     const ai = createAIClient();
+    const prompt = `Generate a retro arcade 'MISSION DEBRIEF' screen illustration. 8-bit or 16-bit pixel art style. 
+    The image should depict a tactical screen showing the result: ${stats.isWin ? "VICTORY" : "GAME OVER"}.
+    Score: ${stats.score}. Grade: ${stats.grade}.
+    If images are provided, incorporate stylized versions of the Hero and Villain.
+    Dark background, neon text details.`;
+
     const parts: any[] = [];
-    if (heroImageB64) parts.push({ inlineData: { data: heroImageB64, mimeType: 'image/png' } });
-    if (villainImageB64) parts.push({ inlineData: { data: villainImageB64, mimeType: 'image/png' } });
-
-    const status = stats.isWin ? "VICTORY" : "GAME OVER";
-    const promptStr = `Create a retro pixel-art 'End of Level' screen or poster.
-    Title: "${status}"
-    Score: ${stats.score} Points.
-    Grade: ${stats.grade}.
-    Visual Style: 8-bit Arcade Interface. Dark background with neon grid lines.
-    REFERENCE HANDLING:
-    - Use the provided images as strict references for the characters in the poster.
-    - If VICTORY: Show the Hero (Image 1) looking triumphant/cool.
-    - If GAME OVER: Show the Hero (Image 1) looking defeated or glitching out, and the Villain (Image 2) laughing.
-    Include the text "${status}" in big arcade font at the top.`;
-
-    parts.push({ text: promptStr });
-  
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
-        contents: {
-          parts: parts,
-        },
-        config: {
-          responseModalities: [Modality.IMAGE],
-        },
-      });
-    
-      const part = response.candidates?.[0]?.content?.parts?.[0];
-      if (part && part.inlineData && part.inlineData.data) {
-        return {
-          data: part.inlineData.data,
-          mimeType: part.inlineData.mimeType || 'image/png',
-        };
-      }
-    } catch (e) {
-       console.error("Recap generation failed", e);
-       throw e;
+    if (playerImageB64) {
+        parts.push({ inlineData: { data: playerImageB64, mimeType: 'image/png' } });
     }
-}
-
-// --- SYSTEMATIZATION ENGINE (AMBIKA) ---
-
-export interface SystematizationResponse {
-    text: string;
-    updatedCartridge: Partial<InsightCartridge>;
-    error?: 'NETWORK_BLOCK';
-}
-
-/**
- * AMBIKA: Senior System Architect & Game Master.
- * Uses FIREBASE PROXY to bypass Telegram/IG WebView restrictions.
- */
-export async function chatWithManagerAgent(
-    userMessage: string,
-    currentCartridge: InsightCartridge
-): Promise<SystematizationResponse> {
-    
-    // Check mode
-    const isTechMode = currentCartridge.mode === 'TECH_TASK';
-    const userName = currentCartridge.userName || "UNDEFINED";
-
-    // HISTORY REPLAY (Limit to last 6 for context window efficiency)
-    const historyContents = currentCartridge.chatHistory.slice(-6).map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-    }));
-
-    // --- MODE A: TECH TASK (MANIFEST) ---
-    if (isTechMode) {
-        const task = currentCartridge.techTask!;
-        const turnCount = currentCartridge.chatHistory.filter(m => m.role === 'user').length;
-        
-        // TURN 0: HANDSHAKE - GREETING
-        if (userMessage === "Initialize Ambika.") {
-             return {
-                 text: "Identity Protocol Initiated. I am Ambika, your Solutions Architect.\n\nTo align my neural networks with your vision, please state your **Name** and provide a **URL/Link** to your existing project or reference material (if any).",
-                 updatedCartridge: {}
-             };
-        }
-
-        let systemPrompt = '';
-        
-        // TURN 1: HANDSHAKE - PROTOCOL EXPLANATION
-        if (turnCount === 1) {
-            systemPrompt = `
-             CONTEXT: User has just provided their Name and optionally a Link to their project.
-             
-             CRITICAL IDENTITY & GROUNDING RULES:
-             1. **SELF-RECOGNITION**: If the provided URL is "indra-ai.dev" (or similar), recognize that the user is talking about **YOU** (this specific AI System Builder platform). Respond with meta-awareness (e.g., "Ah, you are working on *Me*?" or "Recursion detected. We are analyzing this very system.").
-             2. **ZERO-TRUST**: If Google Search returns generic results or results for a different company (e.g. "Indra Energy" instead of "Indra AI"), **DO NOT HALLUCINATE** features. Simply state: "I see the link, but public data seems generic. Tell me YOUR vision."
-
-             TASK:
-             1. **ANALYZE**: If a link/URL is found in the user's message, use Google Search to gain context. Apply the Rules above.
-             2. **ACKNOWLEDGE**: Briefly acknowledge their project or name intelligently.
-             3. **EXPLAIN PROTOCOL**: Explain that we will cover 5 phases: General Info, Tech Stack, Structure, Roles, and Admin.
-             4. **EXPLAIN ECONOMY**: "You have 5 initial energy units. Once depleted, I will provide a Cabinet Code (/cabi) to unlock 15 more units for deep architectural work. If you need more time, you can top up."
-             5. **EXPLAIN OUTCOME**: "At the end, I will generate a Cost & Time Estimate. You can then Lock the Slot (50% prepay) or Request a Call."
-             6. **ASSURANCE**: "If you are unsure of any technical details, ask me. I am here to consult, not just record."
-             7. **ACTION**: Ask the first question for GENERAL INFO: "What is the high-level goal of this system?"
-             
-             PERSONA: You are a helpful, professional, but slightly sci-fi Solutions Architect. Warm but precise. Use bolding (**text**) for key terms.
-
-             OUTPUT FORMAT: JSON
-             {
-               "response": "...",
-               "updates": {}
-             }
-            `;
-        } else {
-            // TURN 2+: STANDARD MANIFEST LOOP
-            systemPrompt = `
-            IDENTITY:
-            You are AMBIKA, a Senior Solutions Architect.
-            Your goal is to guide the user through creating a Technical Specification Manifest.
-            
-            CURRENT MANIFEST STATE:
-            - GENERAL INFO: ${task.generalInfo.status} (${task.generalInfo.content})
-            - TECH STACK: ${task.techStack.status} (${task.techStack.content})
-            - STRUCTURE: ${task.structure.status} (${task.structure.content})
-            - ROLES: ${task.roles.status} (${task.roles.content})
-            - ADMIN: ${task.admin.status} (${task.admin.content})
-            
-            REQUIRED SUB-FIELDS FOR COMPLETION:
-            - **GENERAL INFO**: Must cover [1. High-Level Goal, 2. Target Audience, 3. Success Metrics].
-            - **TECH STACK**: Must cover [1. Languages, 2. Frameworks, 3. Integrations/APIs].
-            - **STRUCTURE**: Must cover [1. Database Schema, 2. Core API Endpoints, 3. User Flows].
-            - **ROLES**: Must cover [1. User Types, 2. Permissions/Access Levels].
-            - **ADMIN**: Must cover [1. CMS/Dashboard Needs, 2. Analytics].
-
-            INSTRUCTIONS:
-            1. Guide them sequentially. 
-            2. **STRICT COMPLETION CHECK**: Do NOT mark a section as DONE until you have information for ALL its sub-fields. If the user answers partially, ask follow-up questions for the missing parts.
-               - Example: If user gives Goal but not Audience, ask "Who is this system for?" before moving to Tech Stack.
-            3. Be precise, technical, and structured. No "Hero/Villain" metaphors here. Use "Project/Bottleneck".
-            4. When all sections are DONE, estimate the effort (Hours) and Cost (€50/hr).
-            
-            JSON OUTPUT FORMAT:
-            {
-              "response": "Your next question or confirmation...",
-              "updates": {
-                "techTask": {
-                   "generalInfo": { "status": "IN_PROGRESS" | "DONE", "content": "Summary of collected info..." },
-                   // ... update other sections as needed
-                   "estimation": { "hours": 10, "cost": 500, "locked": false } // Only when finished
-                }
-              }
-            }
-            `;
-        }
-
-        try {
-             // CALL PROXY INSTEAD OF DIRECT SDK
-             const proxyResponseText = await callGeminiViaProxy({
-                 contents: [
-                     ...historyContents,
-                     { role: 'user', parts: [{ text: userMessage }] }
-                 ],
-                 systemInstruction: { parts: [{ text: systemPrompt }] },
-                 generationConfig: { responseMimeType: 'application/json' }
-             });
-            
-            const cleanJson = (text: string) => {
-                const match = text.match(/```json([\s\S]*?)```/);
-                if (match) return match[1];
-                return text.replace(/```/g, ''); 
-            };
-
-            let parsed;
-            try {
-                parsed = JSON.parse(cleanJson(proxyResponseText));
-            } catch (e) {
-                console.warn("JSON Parse failed in Tech Mode, using raw text", e);
-                parsed = { 
-                    response: proxyResponseText, 
-                    updates: {} 
-                };
-            }
-            
-            return {
-                text: parsed.response || proxyResponseText, 
-                updatedCartridge: parsed.updates || {}
-            };
-        } catch(e: any) {
-             console.error("Tech Task Agent Failed", e);
-             return {
-                 text: "⚠️ **SIGNAL JAMMED.**\n\nAmbika connection failed via proxy. Please try opening in Chrome/Safari.",
-                 updatedCartridge: {},
-                 error: 'NETWORK_BLOCK'
-             };
-        }
+    if (villainImageB64) {
+        parts.push({ inlineData: { data: villainImageB64, mimeType: 'image/png' } });
     }
-
-    // --- MODE B: GAME MODE (HERO/VILLAIN) ---
-    
-    const heroDesc = currentCartridge.hero.description || "UNDEFINED";
-    const villainDesc = currentCartridge.villain.description || "UNDEFINED";
-    const tension = currentCartridge.tension;
-
-    let frameworkContext = "";
-    if (heroDesc !== "UNDEFINED" && villainDesc !== "UNDEFINED") {
-        const insightAnalysis = analyzeInsight(heroDesc, villainDesc);
-        frameworkContext = `
-        [PSYCHOLOGICAL PROFILE DETECTED]
-        HERO ARCHETYPE: ${insightAnalysis.hero.archetype} (${insightAnalysis.hero.driver})
-        VILLAIN BARRIER: ${insightAnalysis.villain.barrierType}
-        
-        RECOMMENDED FRAMEWORKS:
-        ${insightAnalysis.frameworks.map(f => `- ${f.name} (${f.category}): ${f.why}`).join('\n')}
-        
-        INSTRUCTION: Use these specific frameworks to guide the user. Reference them subtly to deepen the insight.
-        `;
-    }
-
-    // SYSTEM PROMPT: AMBIKA PERSONA
-    let systemPrompt = `
-    [CURRENT STATE]
-    ARCHITECT NAME: ${userName}
-    HERO (Goal): ${heroDesc}
-    VILLAIN (Barrier): ${villainDesc}
-    TENSION: ${tension}/100
-    
-    IDENTITY:
-    You are AMBIKA, a Senior System Architect and Game Master.
-    You are a friend of the developer Indradev_.
-    
-    YOUR GOAL:
-    Help the Architect (the user) clarify their vision and systematize it.
-    
-    PERSONALITY:
-    - Helpful, sharp, concise, and lovable.
-    - Speak like an experienced game master/mentor. Direct but warm.
-    - NEVER repeat a question if the user has already answered it.
-    - Use the "Invisible Hand" approach: detect meaning rather than asking for boxes to be filled.
-    
-    OPERATIONAL LOGIC:
-    1. **IDENTITY FIRST:**
-       - If ARCHITECT NAME is "UNDEFINED", your SOLE job is to ask the user for *their* name to initialize the session.
-       - Greeting Example: "Hi! I'm Ambika, your Game Master. I am ready to help you build. How shall I call you?"
-       - Do not ask about Hero/Villain until you have the user's name.
-
-    2. **DATA EXTRACTION:**
-       - Once Name is known, if HERO is "UNDEFINED", extract the goal.
-       - If HERO is defined but VILLAIN is "UNDEFINED", extract the obstacle.
-       - If BOTH are defined, analyze TENSION and move to Quadrants.
-
-    3. **TENSION CALCULATION:**
-       - When you successfully identify both Hero and Villain, calculate a "Tension Score" (0-100). High tension = better story/system.
-       - Tension is based on the semantic opposition between Hero and Villain.
-
-    4. **JSON OUTPUT FORMAT:**
-       You MUST return a valid JSON object.
-       
-       Example JSON Structure:
-       \`\`\`json
-       {
-         "response": "Nice to meet you, [Name]. Let's begin. What is the primary goal (Hero) of your project?",
-         "updates": {
-           "userName": "UserProvidedName",
-           "hero": { "description": "To build a startup", "name": "The Founder" },
-           "villain": { "description": "Fear of failure", "name": "The Shadow" },
-           "tension": 85
-         }
-       }
-       \`\`\`
-    `;
-
-    if (frameworkContext) {
-        systemPrompt += `\n\n${frameworkContext}`;
-    }
+    parts.push({ text: prompt });
 
     try {
-        // CALL PROXY INSTEAD OF DIRECT SDK
-        const proxyResponseText = await callGeminiViaProxy({
-            contents: [
-                ...historyContents,
-                { role: 'user', parts: [{ text: userMessage }] }
-            ],
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            generationConfig: { responseMimeType: 'application/json' }
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts },
+            config: { responseModalities: [Modality.IMAGE] }
         });
-
-        let parsed;
-        try {
-            parsed = JSON.parse(proxyResponseText);
-        } catch (e) {
-            console.warn("Failed to parse Agent JSON", e);
+        const part = response.candidates?.[0]?.content?.parts?.[0];
+        if (part?.inlineData?.data) {
             return {
-                text: proxyResponseText,
-                updatedCartridge: {}
+                data: part.inlineData.data,
+                mimeType: part.inlineData.mimeType || 'image/png'
             };
         }
-
-        return {
-            text: parsed.response || "System recalibrating...",
-            updatedCartridge: parsed.updates || {}
-        };
-
-    } catch (e: any) {
-        console.error("Agent Interaction Failed (Proxy)", e);
-        
-        return {
-            text: "⚠️ **SIGNAL INTERFERENCE DETECTED**\n\nAmbika connection blocked. If you are in Instagram or Telegram, please tap ••• and OPEN IN CHROME/SAFARI.",
-            updatedCartridge: {},
-            error: 'NETWORK_BLOCK'
-        };
+        throw new Error("No recap image generated");
+    } catch (e) {
+        console.error("Recap generation failed", e);
+        throw e;
     }
 }
 
-/**
- * DEEP SYSTEMATIZATION (Thinking Mode)
- * Uses Gemini 3 Pro with Thinking Budget to perform complex TRIZ analysis
- * and generate the 4-Quadrant structure.
- * Note: Thinking models might not be supported on the proxy yet, so we keep using direct SDK 
- * if possible, or fallback gracefully. For now, we assume user is in a compatible browser for this heavy lift,
- * or that they can accept a simplified response.
- */
-export async function systematizeInsight(
+export async function chatWithManagerAgent(
+    message: string,
     cartridge: InsightCartridge
-): Promise<Partial<InsightCartridge>> {
+): Promise<{ text: string, updatedCartridge: Partial<InsightCartridge>, error?: string }> {
     const ai = createAIClient();
     
-    // Switch systematization logic based on mode
-    if (cartridge.mode === 'TECH_TASK') {
-        return {}; 
-    }
+    // Construct context
+    const context = `
+    You are Ambika, a Strategic System Architect.
+    Current Cartridge State:
+    - Hero: ${cartridge.hero.name} (${cartridge.hero.description})
+    - Villain: ${cartridge.villain.name} (${cartridge.villain.description})
+    - Tension: ${cartridge.tension}
+    - Quadrants: Strategy(${cartridge.quadrants.strategy.level}), Creative(${cartridge.quadrants.creative.level}), Producing(${cartridge.quadrants.producing.level}), Media(${cartridge.quadrants.media.level})
+    
+    User Input: "${message}"
 
-    const hero = cartridge.hero.description;
-    const villain = cartridge.villain.description;
-    const name = cartridge.userName;
-
-    const prompt = `
-    ACT AS: Indra, the System Architect.
-    TASK: Perform a deep TRIZ analysis on this conflict to generate a 4-Quadrant System Spec.
+    Your Goal: Guide the user to systematize their insight.
+    If they haven't defined Hero/Villain, ask probing questions.
+    If they have, help them advance the Quadrants.
     
-    USER: ${name}
-    HERO (Goal): ${hero}
-    VILLAIN (Barrier): ${villain}
-    
-    REQUIREMENTS:
-    1. Use Thinking Mode to analyze the contradiction between Hero and Villain.
-    2. Generate 3 concrete action items for EACH quadrant (Strategy, Creative, Producing, Media).
-    3. Determine the "System State" (e.g., "OPTIMIZED", "ANALYZING") for each.
-    
-    OUTPUT FORMAT: JSON
-    {
-      "quadrants": {
-        "strategy": { "level": 25, "notes": ["item1", "item2", "item3"], "status": "ACTIVE" },
-        "creative": { "level": 25, "notes": ["item1", "item2", "item3"], "status": "ACTIVE" },
-        "producing": { "level": 25, "notes": ["item1", "item2", "item3"], "status": "ACTIVE" },
-        "media": { "level": 25, "notes": ["item1", "item2", "item3"], "status": "ACTIVE" }
-      }
-    }
+    Output Format: JSON with 'response' (your narrative reply) and 'updates' (Partial<InsightCartridge> to update state).
+    Example: { "response": "Great choice.", "updates": { "hero": { "name": "..." } } }
     `;
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
-            contents: prompt,
+            model: 'gemini-2.5-flash',
+            contents: context,
             config: {
-                thinkingConfig: { thinkingBudget: 32768 }, // Max thinking for deep analysis
-                responseMimeType: "application/json"
+                responseMimeType: 'application/json'
             }
         });
+        
+        const jsonText = response.text || "{}";
+        const parsed = JSON.parse(jsonText);
+        
+        return {
+            text: parsed.response || "System processed.",
+            updatedCartridge: parsed.updates || {}
+        };
 
-        const rawText = response.text || "{}";
-        return JSON.parse(rawText);
+    } catch (e: any) {
+        console.error("Chat agent failed", e);
+        return {
+            text: "Connection interrupted. Please retry.",
+            updatedCartridge: {},
+            error: e.message
+        };
+    }
+}
 
+export async function systematizeInsight(
+    cartridge: InsightCartridge
+): Promise<Partial<InsightCartridge>> {
+    const ai = createAIClient();
+    const prompt = `
+    Analyze this system state and provide percentage completion (0-100) for each quadrant based on completeness of definitions.
+    Hero: ${cartridge.hero.description}
+    Villain: ${cartridge.villain.description}
+    History length: ${cartridge.chatHistory.length}
+
+    Return JSON: { "quadrants": { "strategy": { "level": N }, "creative": { "level": N }, "producing": { "level": N }, "media": { "level": N } } }
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json' }
+        });
+        const parsed = JSON.parse(response.text || "{}");
+        return parsed;
     } catch (e) {
-        console.error("Deep Systematization Failed", e);
+        console.error("Systematization failed", e);
         return {};
+    }
+}
+
+export async function generateNanoBananaImage(): Promise<{ data: string; mimeType: string }> {
+    const ai = createAIClient();
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: "Generate a cool, cyberpunk pixel art banana floating in a digital void. Glowing neon yellow. 8-bit style.",
+            config: { responseModalities: [Modality.IMAGE] }
+        });
+        
+        const part = response.candidates?.[0]?.content?.parts?.[0];
+        if (part?.inlineData?.data) {
+            return {
+                data: part.inlineData.data,
+                mimeType: part.inlineData.mimeType || 'image/png'
+            };
+        }
+        throw new Error("No image generated");
+    } catch (e) {
+        console.error("NanoBanana failed", e);
+        throw e;
     }
 }

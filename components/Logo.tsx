@@ -1,3 +1,4 @@
+
 /**
  * @license SPDX-License-Identifier: Apache-2.0
  * Smart Logo: Home portal anchor with game progress badge
@@ -66,7 +67,8 @@ export const Logo: React.FC<LogoProps> = ({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-amethyst-500)] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--accent-amethyst-500)]"></span>
             </div>
-            <span className="logo-text font-[var(--font-display)] text-2xl text-[var(--text-primary)] tracking-widest leading-none mt-1">
+            {/* UPDATED FONT: Using font-mono to match "YOUR INSIGHT IS DYING" subtext */}
+            <span className="logo-text font-mono font-bold text-xl md:text-2xl text-[var(--text-primary)] tracking-widest leading-none mt-1">
                 INDRA-AI.DEV
             </span>
         </div>

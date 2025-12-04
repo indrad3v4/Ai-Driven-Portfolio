@@ -20,7 +20,7 @@ import BossRaidCalendar from './components/BossRaidCalendar';
 import { useGamePortal } from './hooks/useGamePortal';
 import Logo from './components/Logo';
 import { ManifestoSection } from './components/ManifestoSection';
-import { injectJsonLd, getSEOConfig, generateMetaTags } from './lib/seo';
+import { injectJsonLd, getSEOConfig, generateMetaTags, applyDOMMetaTags } from './lib/seo';
 
 // --- REUSABLE COMPONENTS ---
 
@@ -230,6 +230,9 @@ const App: React.FC = () => {
   useEffect(() => {
       const seoConfig = getSEOConfig(appState === 'SETUP' ? 'landing' : 'game');
       document.title = seoConfig.title;
+      
+      const metaTags = generateMetaTags(seoConfig);
+      applyDOMMetaTags(metaTags);
   }, [appState]);
 
   // PORTAL EFFECT: If logo clicked, force state to SETUP
