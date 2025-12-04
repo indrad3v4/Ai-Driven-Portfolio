@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <!-- TRIZ PRINCIPLE #2: Extraction. Remove the 'Referer' header so API doesn't know we are in a hostile app. -->
+    <meta name="referrer" content="no-referrer" />
     <title>Indra AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -96,7 +97,10 @@
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "zustand": "https://aistudiocdn.com/zustand@^5.0.2",
+    "zustand/middleware": "https://aistudiocdn.com/zustand@^5.0.2/middleware",
+    "zustand/": "https://aistudiocdn.com/zustand@^5.0.9/"
   }
 }
 </script>

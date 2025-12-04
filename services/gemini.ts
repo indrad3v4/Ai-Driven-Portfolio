@@ -1,10 +1,12 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { GoogleGenAI, Modality, Tool } from "@google/genai";
-import { InsightCartridge, QuadrantData } from "../lib/insight-object";
+import { GoogleGenAI, Modality } from "@google/genai";
+import { InsightCartridge } from "../lib/insight-object";
 import { analyzeInsight } from "../lib/framework-database";
+import { callGeminiViaProxy } from "./geminiProxy";
 
 // Ensure API key is present
 if (!process.env.API_KEY) {
@@ -254,56 +256,13 @@ export interface SystematizationResponse {
 }
 
 /**
- * PHASE 1: Research/Grounding Agent (Text Output, Search Enabled)
- * Finds relevant frameworks to ground the conversation.
- */
-async function performResearchPhase(
-    query: string, 
-    hero: string, 
-    villain: string
-): Promise<string> {
-    const ai = createAIClient();
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `
-                SEARCH QUERY GENERATION CONTEXT:
-                User is building an AI system/narrative.
-                Hero (Goal): ${hero}
-                Villain (Obstacle): ${villain}
-                Current User Input: "${query}"
-                
-                TASK:
-                Use Google Search to find relevant frameworks, psychological archetypes, or technical strategies that apply to this specific context.
-                If the user's input is simple (e.g. "yes", "hello", "my name is X"), return "NO_SEARCH_NEEDED".
-                Otherwise, provide a concise (2-3 sentences) summary of relevant external knowledge to ground the system's advice.
-            `,
-            config: {
-                tools: [{ googleSearch: {} }],
-            }
-        });
-        return response.text || "NO_SEARCH_NEEDED";
-    } catch (e) {
-        console.warn("Research phase warning:", e);
-        return "NO_SEARCH_NEEDED";
-    }
-}
-
-/**
  * AMBIKA: Senior System Architect & Game Master.
- * Focused on systematizing user insights into the 4D framework using TRIZ.
- * 
- * FEATURES:
- * - Two-Phase Architecture: 
- *   1. Search Phase (Text Output) for grounding
- *   2. Synthesis Phase (JSON Output) for app state updates
- * - Persona: Warm, sharp, concise "Game Master"
+ * Uses FIREBASE PROXY to bypass Telegram/IG WebView restrictions.
  */
 export async function chatWithManagerAgent(
     userMessage: string,
     currentCartridge: InsightCartridge
 ): Promise<SystematizationResponse> {
-    const ai = createAIClient();
     
     // Check mode
     const isTechMode = currentCartridge.mode === 'TECH_TASK';
@@ -321,7 +280,6 @@ export async function chatWithManagerAgent(
         const turnCount = currentCartridge.chatHistory.filter(m => m.role === 'user').length;
         
         // TURN 0: HANDSHAKE - GREETING
-        // SystemWorkspace sends "Initialize Ambika." automatically at start.
         if (userMessage === "Initialize Ambika.") {
              return {
                  text: "Identity Protocol Initiated. I am Ambika, your Solutions Architect.\n\nTo align my neural networks with your vision, please state your **Name** and provide a **URL/Link** to your existing project or reference material (if any).",
@@ -400,59 +358,44 @@ export async function chatWithManagerAgent(
         }
 
         try {
-             // Always enable search for Tech Task to allow consulting
-             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [
-                    ...historyContents,
-                    { role: 'user', parts: [{ text: userMessage }] }
-                ],
-                config: {
-                    systemInstruction: systemPrompt,
-                    // responseMimeType: "application/json", // REMOVED: Unsuppported with Tools
-                    tools: [{ googleSearch: {} }] 
-                }
-            });
+             // CALL PROXY INSTEAD OF DIRECT SDK
+             const proxyResponseText = await callGeminiViaProxy({
+                 contents: [
+                     ...historyContents,
+                     { role: 'user', parts: [{ text: userMessage }] }
+                 ],
+                 systemInstruction: { parts: [{ text: systemPrompt }] },
+                 generationConfig: { responseMimeType: 'application/json' }
+             });
             
-            const rawText = response.text || "{}";
-            
-            // Clean up Markdown code blocks if present
             const cleanJson = (text: string) => {
                 const match = text.match(/```json([\s\S]*?)```/);
                 if (match) return match[1];
-                return text.replace(/```/g, ''); // Fallback cleaning
+                return text.replace(/```/g, ''); 
             };
 
             let parsed;
             try {
-                parsed = JSON.parse(cleanJson(rawText));
+                parsed = JSON.parse(cleanJson(proxyResponseText));
             } catch (e) {
-                // Fallback: If model didn't return JSON (e.g. it just chatted), 
-                // wrap the text as the response and assume no updates.
                 console.warn("JSON Parse failed in Tech Mode, using raw text", e);
                 parsed = { 
-                    response: rawText, 
+                    response: proxyResponseText, 
                     updates: {} 
                 };
             }
             
             return {
-                text: parsed.response || rawText, 
+                text: parsed.response || proxyResponseText, 
                 updatedCartridge: parsed.updates || {}
             };
         } catch(e: any) {
              console.error("Tech Task Agent Failed", e);
-             
-             // Check for 403 Forbidden which implies Social Browser Blocking
-             if (e.message?.includes('403') || e.status === 403 || e.toString().includes('403')) {
-                 return {
-                     text: "⚠️ **SIGNAL JAMMED.**\n\n[SOCIAL_BROWSER_DETECTED]. The API uplink was severed by the in-app browser policy.\n\n**CRITICAL ACTION:** Tap the menu (•••) and select **OPEN IN BROWSER**.",
-                     updatedCartridge: {},
-                     error: 'NETWORK_BLOCK'
-                 };
-             }
-
-             return { text: "Spec generation error.", updatedCartridge: {} };
+             return {
+                 text: "⚠️ **SIGNAL JAMMED.**\n\nAmbika connection failed via proxy. Please try opening in Chrome/Safari.",
+                 updatedCartridge: {},
+                 error: 'NETWORK_BLOCK'
+             };
         }
     }
 
@@ -462,16 +405,6 @@ export async function chatWithManagerAgent(
     const villainDesc = currentCartridge.villain.description || "UNDEFINED";
     const tension = currentCartridge.tension;
 
-    // PHASE 1: RESEARCH (Grounding)
-    let searchGrounding = "";
-    if (userMessage.length > 3) {
-        const researchResult = await performResearchPhase(userMessage, heroDesc, villainDesc);
-        if (researchResult && !researchResult.includes("NO_SEARCH_NEEDED")) {
-            searchGrounding = researchResult;
-        }
-    }
-
-    // STATIC FRAMEWORK ANALYSIS (Grounding without Search)
     let frameworkContext = "";
     if (heroDesc !== "UNDEFINED" && villainDesc !== "UNDEFINED") {
         const insightAnalysis = analyzeInsight(heroDesc, villainDesc);
@@ -540,39 +473,28 @@ export async function chatWithManagerAgent(
        \`\`\`
     `;
 
-    // Inject Framework Data into the prompt context for Phase 2
     if (frameworkContext) {
         systemPrompt += `\n\n${frameworkContext}`;
     }
 
-    // Inject Grounding Data into the prompt context for Phase 2
-    if (searchGrounding) {
-        systemPrompt += `\n\n[REAL-WORLD GROUNDING]\nThe following information was retrieved from Google Search to help you contextually:\n${searchGrounding}\nUse this to provide sharper, more relevant feedback.`;
-    }
-
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash', // Fast model for chat
+        // CALL PROXY INSTEAD OF DIRECT SDK
+        const proxyResponseText = await callGeminiViaProxy({
             contents: [
                 ...historyContents,
                 { role: 'user', parts: [{ text: userMessage }] }
             ],
-            config: {
-                systemInstruction: systemPrompt,
-                responseMimeType: "application/json",
-                // tools: [] // Ensure no tools here to avoid conflict with responseMimeType
-            }
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: { responseMimeType: 'application/json' }
         });
 
-        const rawText = response.text || "{}";
         let parsed;
         try {
-            parsed = JSON.parse(rawText);
+            parsed = JSON.parse(proxyResponseText);
         } catch (e) {
             console.warn("Failed to parse Agent JSON", e);
-            // Fallback if model refuses JSON
             return {
-                text: rawText,
+                text: proxyResponseText,
                 updatedCartridge: {}
             };
         }
@@ -583,22 +505,12 @@ export async function chatWithManagerAgent(
         };
 
     } catch (e: any) {
-        console.error("Agent Interaction Failed", e);
+        console.error("Agent Interaction Failed (Proxy)", e);
         
-        // --- TRIZ SOLUTION: DIEGETIC ERROR HANDLING ---
-        // If we detect a 403 Forbidden (likely Referrer check failure due to Social WebView),
-        // we provide a specific, actionable error message to the user AND trigger the component escalation.
-        if (e.message?.includes('403') || e.status === 403 || e.toString().includes('403')) {
-             return {
-                text: "⚠️ **SIGNAL INTERFERENCE DETECTED**\n\nAmbika connection blocked by social media browser protocols (Referrer Policy).\n\n**FIX:** Tap the '...' menu in the top right and select **OPEN IN BROWSER** (Safari/Chrome) to re-establish the Neural Link.",
-                updatedCartridge: {},
-                error: 'NETWORK_BLOCK'
-            };
-        }
-
         return {
-            text: "Ambika Connection Interrupted. Please retry.",
-            updatedCartridge: {}
+            text: "⚠️ **SIGNAL INTERFERENCE DETECTED**\n\nAmbika connection blocked. If you are in Instagram or Telegram, please tap ••• and OPEN IN CHROME/SAFARI.",
+            updatedCartridge: {},
+            error: 'NETWORK_BLOCK'
         };
     }
 }
@@ -607,6 +519,9 @@ export async function chatWithManagerAgent(
  * DEEP SYSTEMATIZATION (Thinking Mode)
  * Uses Gemini 3 Pro with Thinking Budget to perform complex TRIZ analysis
  * and generate the 4-Quadrant structure.
+ * Note: Thinking models might not be supported on the proxy yet, so we keep using direct SDK 
+ * if possible, or fallback gracefully. For now, we assume user is in a compatible browser for this heavy lift,
+ * or that they can accept a simplified response.
  */
 export async function systematizeInsight(
     cartridge: InsightCartridge
@@ -615,8 +530,6 @@ export async function systematizeInsight(
     
     // Switch systematization logic based on mode
     if (cartridge.mode === 'TECH_TASK') {
-        // TECH TASK SYSTEMATIZATION (Final Polish/Estimation)
-        // ... implementation for final tech task refinement if needed
         return {}; 
     }
 

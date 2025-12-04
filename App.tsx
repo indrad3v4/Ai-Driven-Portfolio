@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -16,6 +17,10 @@ import { InsightCartridge, createEmptyCartridge } from './lib/insight-object';
 import SystemWorkspace from './components/SystemWorkspace';
 import SystemArchive from './components/SystemArchive';
 import BossRaidCalendar from './components/BossRaidCalendar';
+import { useGamePortal } from './hooks/useGamePortal';
+import Logo from './components/Logo';
+import { ManifestoSection } from './components/ManifestoSection';
+import { injectJsonLd, getSEOConfig, generateMetaTags } from './lib/seo';
 
 // --- REUSABLE COMPONENTS ---
 
@@ -26,72 +31,107 @@ interface WebViewWarnerProps {
 }
 
 const WebViewWarner: React.FC<WebViewWarnerProps> = ({ status, appName }) => {
+    const [copied, setCopied] = useState(false);
+
+    // If OK, show nothing
     if (status === 'OK') return null;
 
     // Helper to attempt external open
     const openExternal = () => {
-        // Fallback for Android (Intent Scheme)
+        // 1. Get current URL, ensure it's clean
+        const url = window.location.href;
+        
+        // 2. Android Strategy: "Intent Bomb" with fallback
         if (/Android/i.test(navigator.userAgent)) {
-            window.location.href = `intent:${window.location.href}#Intent;end`;
-        } else {
-            // iOS/Generic - attempt pop-up, though often blocked
-            alert(`Please tap the menu icon (•••) and select "Open in Browser" to escape ${appName || 'this app'}.`);
+            const cleanUrl = url.replace(/^https?:\/\//, '');
+            // Force Chrome. S.browser_fallback_url triggers if Chrome isn't found.
+            // We use scheme=https to ensure it opens as a web page, not a search.
+            const intent = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+            window.location.href = intent;
+        } 
+        // 3. iOS Strategy: "Polite Request"
+        else if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            // iOS is stricter. We try the googlechrome:// scheme first.
+            const chromeUrl = `googlechrome://${url.replace(/^https?:\/\//, '')}`;
+            window.location.href = chromeUrl;
+            
+            // Fallback: iOS Safari "Open in Browser" usually requires user action in the menu.
+        } 
+        // 4. Desktop/Other
+        else {
+            window.open(url, '_system');
         }
     };
 
+    const handleCopy = () => {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
+    // RED STATE: SIGNAL JAMMED (Blocking) - Only happens if API actually fails
     if (status === 'BROKEN') {
         return (
-            <div className="fixed inset-0 z-[9999] bg-[var(--accent-ruby-900)]/95 text-white flex flex-col items-center justify-center p-8 text-center backdrop-blur-xl animate-in zoom-in duration-300">
-                <div className="text-6xl mb-4 animate-pulse">⚠️</div>
-                <h2 className="font-display text-4xl mb-2 tracking-widest text-[var(--accent-topaz-300)]">CRITICAL FAILURE</h2>
-                <p className="font-mono text-sm mb-6 max-w-md leading-relaxed">
-                    The {appName || 'Social Media'} browser has severed the neural link (API Connection). 
-                    The AI cannot operate in this restricted environment.
-                </p>
-                <button 
-                    onClick={openExternal}
-                    className="px-6 py-4 bg-white text-[var(--accent-ruby-900)] font-bold font-mono rounded shadow-[0_0_30px_rgba(255,255,255,0.5)] hover:scale-105 transition-transform"
-                >
-                    OPEN IN SYSTEM BROWSER
-                </button>
-                <p className="mt-8 text-[10px] font-mono opacity-50">
-                    Tap ••• (Menu) {'>'} Open in Browser
-                </p>
+            <div className="fixed inset-0 z-[9999] bg-[var(--bg-void)] flex flex-col items-center justify-center p-6 text-center animate-in zoom-in duration-300">
+                {/* Visual Glitch Effect */}
+                <div className="text-6xl mb-4 animate-pulse relative">
+                    📡
+                    <span className="absolute top-0 left-0 animate-ping opacity-50">📡</span>
+                </div>
+                
+                <h2 className="font-display text-4xl mb-4 tracking-widest text-[var(--accent-ruby-500)] manga-text-stroke" data-text="SIGNAL LOST">
+                    SIGNAL LOST
+                </h2>
+
+                <div className="p-6 border-2 border-[var(--accent-ruby-500)] bg-[var(--accent-ruby-500)]/10 rounded-lg max-w-md mb-8 shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+                    <p className="font-mono text-sm leading-relaxed mb-4 text-[var(--text-primary)]">
+                        The Neural Link failed inside <strong>{appName || 'THIS APP'}</strong>.
+                        <br/><br/>
+                        Social browsers (especially Telegram/IG) block AI connections. You must eject to the system browser.
+                    </p>
+                    <div className="h-[1px] bg-[var(--accent-ruby-500)]/50 w-full mb-4"></div>
+                </div>
+                
+                <div className="flex flex-col gap-4 w-full max-w-xs">
+                    <button 
+                        onClick={openExternal}
+                        className="w-full py-4 bg-[var(--accent-emerald-500)] text-[var(--bg-void)] font-display font-bold text-xl rounded shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 transition-transform animate-pulse"
+                    >
+                        OPEN IN CHROME / SAFARI
+                    </button>
+                    
+                    <button 
+                        onClick={handleCopy}
+                        className="w-full py-3 bg-[var(--bg-surface)] border border-[var(--text-muted)] text-[var(--text-secondary)] font-mono text-xs rounded hover:bg-[var(--bg-overlay)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center gap-2"
+                    >
+                        {copied ? "COPIED! ✅" : "📋 COPY LINK MANUALLY"}
+                    </button>
+
+                    {/* iOS Specific Instruction */}
+                    <div className="text-xs font-mono text-[var(--text-muted)] mt-2 border-t border-[var(--line-soft)] pt-4">
+                        <span className="text-[var(--accent-topaz-500)] font-bold">MANUAL OVERRIDE:</span><br/>
+                        Tap <span className="text-white font-bold border border-white/20 px-1 rounded">•••</span> or <span className="text-white font-bold border border-white/20 px-1 rounded">Share</span> <br/>
+                        Then select <span className="text-white font-bold">Open in Browser</span>
+                    </div>
+                </div>
             </div>
         );
     }
 
-    // WARNING STATE (Slim Bar)
-    return (
-        <div className="fixed top-0 left-0 w-full z-[9999] bg-[var(--accent-topaz-500)] text-[var(--bg-void)] px-3 py-2 flex justify-between items-center shadow-[0_0_20px_var(--accent-topaz-500)] animate-in slide-in-from-top duration-500">
-            <div className="flex items-center gap-2 font-bold font-mono text-[10px] md:text-xs">
-                <span className="animate-pulse">⚠️</span>
-                <span>RUNNING IN {appName ? appName.toUpperCase() : 'APP BROWSER'}. AI MAY BE UNSTABLE.</span>
-            </div>
-            <button 
-                onClick={openExternal}
-                className="text-[9px] font-mono font-bold border border-[var(--bg-void)] px-2 py-1 rounded hover:bg-[var(--bg-void)] hover:text-[var(--accent-topaz-500)] transition-colors"
-            >
-                OPEN EXTERNAL
-            </button>
-        </div>
-    );
+    // YELLOW STATE: CAUTION (Non-Blocking) - Educational
+    // DISABLED: We trust our proxy now. Only show if BROKEN.
+    return null;
 };
 
 // HEADER COMPONENT (INDRA AI BRANDING)
-const Header: React.FC<{ onCalendarClick: () => void }> = ({ onCalendarClick }) => {
+const Header: React.FC<{ onCalendarClick: () => void, isLanding?: boolean }> = ({ onCalendarClick, isLanding = false }) => {
     const { theme, toggleTheme } = useTheme();
     
     return (
         <header className="h-14 flex items-center justify-between px-4 border-b border-[var(--line-soft)] bg-[var(--bg-void)]/90 backdrop-blur-md z-50 pointer-events-auto relative shrink-0">
             <div className="flex items-center gap-3">
-                <div className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-amethyst-500)] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--accent-amethyst-500)]"></span>
-                </div>
-                <h1 className="font-[var(--font-display)] text-2xl text-[var(--text-primary)] tracking-widest leading-none mt-1">
-                    INDRA-AI.DEV
-                </h1>
+                <Logo isLanding={isLanding} />
             </div>
             
             <div className="flex items-center gap-2">
@@ -158,6 +198,9 @@ const IntroAnimation: React.FC<{ onComplete: () => void; onImpact: () => void }>
 type AppState = 'SETUP' | 'SYSTEMATIZING' | 'GAMEPLAY' | 'RECAP' | 'VICTORY';
 
 const App: React.FC = () => {
+  // --- ZUSTAND GLOBAL STATE ---
+  const { cartridge, setCartridge, portalActive, deactivatePortal } = useGamePortal();
+  
   const [appState, setAppState] = useState<AppState>('SETUP');
   const [showIntro, setShowIntro] = useState(true);
   const [uiVisible, setUiVisible] = useState(false);
@@ -166,49 +209,60 @@ const App: React.FC = () => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [initialDossierId, setInitialDossierId] = useState<string | null>(null);
+  const [showManifesto, setShowManifesto] = useState(false); // New state for manifesto toggle
   
   // WebView & Network State
   const [connectionStatus, setConnectionStatus] = useState<'OK' | 'WARNING' | 'BROKEN'>('OK');
   const [detectedApp, setDetectedApp] = useState<string | null>(null);
 
-  // Cartridge State (The core data structure)
-  const [cartridge, setCartridge] = useState<InsightCartridge>(createEmptyCartridge());
-  
   // Game State
   const [levelIndex, setLevelIndex] = useState(0);
   const [gameStats, setGameStats] = useState<LevelStats | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('NORMAL');
   
+  // Input Focus Ref for "Ready to ship?" CTA
+  const insertMindInputRef = useRef<HTMLButtonElement>(null);
+
   // Theme
   const { theme } = useTheme();
 
+  // SEO Metadata Injection
+  useEffect(() => {
+      const seoConfig = getSEOConfig(appState === 'SETUP' ? 'landing' : 'game');
+      document.title = seoConfig.title;
+  }, [appState]);
+
+  // PORTAL EFFECT: If logo clicked, force state to SETUP
+  useEffect(() => {
+    if (portalActive) {
+      setAppState('SETUP');
+      setShowArchive(false);
+      setShowCalendar(false);
+      setShowManifesto(false);
+      deactivatePortal();
+    }
+  }, [portalActive]);
+
   // BROWSER & DEEP LINK CHECK
   useEffect(() => {
-      // 1. Check for Social Browsers (Expanded List)
+      // 1. Check for Social Browsers (UNIVERSAL DETECTION)
       const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
       
       const appPatterns = [
           { name: 'Instagram', regex: /Instagram/i },
           { name: 'Facebook', regex: /FBAN|FBAV/i },
-          { name: 'LinkedIn', regex: /LinkedIn/i },
-          { name: 'Twitter', regex: /Twitter|Trident/i }, // Trident covers X in-app
+          { name: 'Messenger', regex: /Messenger/i },
+          { name: 'Telegram', regex: /Telegram/i },
           { name: 'TikTok', regex: /TikTok|Musical_ly|Bytedance/i },
-          { name: 'Snapchat', regex: /Snapchat/i },
-          { name: 'Discord', regex: /Discord/i },
-          { name: 'Slack', regex: /Slack/i },
-          { name: 'WhatsApp', regex: /WhatsApp/i },
-          { name: 'WeChat', regex: /WeChat|MicroMessenger/i },
-          { name: 'Line', regex: /Line\//i },
-          { name: 'Pinterest', regex: /Pinterest/i },
-          // Generic Android WebView heuristic: "; wv" is present in webviews but not Chrome/Firefox
-          { name: 'Android App', regex: /Android.*\; wv/i },
+          { name: 'In-App Browser', regex: /wv|WebView/i },
       ];
 
       const match = appPatterns.find(p => p.regex.test(ua));
       
       if (match) {
           setDetectedApp(match.name);
-          setConnectionStatus('WARNING'); // Probationary Access
+          // DISABLE PREEMPTIVE WARNING. We trust the proxy now.
+          // setConnectionStatus('WARNING'); 
       }
 
       // 2. Check for Deep Linking
@@ -217,34 +271,36 @@ const App: React.FC = () => {
       if (portfolioId) {
           setInitialDossierId(portfolioId);
           setShowArchive(true);
-          // Skip intro if deep linking for faster access
           setShowIntro(false);
           setUiVisible(true);
       }
   }, []);
 
-  const handleNetworkError = () => {
-      // Escalation Protocol: If already warned, go to BROKEN. 
-      // If assumed OK but failed specifically on network, also go to BROKEN (could be undetected webview).
-      setConnectionStatus('BROKEN');
-  };
+  const handleNetworkError = useCallback(() => {
+      // Escalation Protocol: If API fails, we assume we are in a hostile WebView (like Telegram)
+      console.warn("CRITICAL: Network Health Check Failed. Triggering WebView Warner.");
+      
+      // ESCALATE TO RED STATE (Blocking)
+      setConnectionStatus('BROKEN'); 
+      if (!detectedApp) {
+          setDetectedApp('RESTRICTED NETWORK / WEBVIEW');
+      }
+  }, [detectedApp]);
 
-  // SYNC APP STATE WITH CARTRIDGE STATUS
+  // SYNC APP STATE WITH CARTRIDGE STATUS (Only if not SETUP/Portal overrides)
   useEffect(() => {
-    if (cartridge.status === 'GAMEPLAY' && appState !== 'GAMEPLAY') {
+    if (!portalActive && cartridge.status === 'GAMEPLAY' && appState !== 'GAMEPLAY') {
       setAppState('GAMEPLAY');
     }
-  }, [cartridge.status]);
+  }, [cartridge.status, portalActive]);
 
   const handleInsertMind = () => {
-      // Transition to Systematization (Workspace)
       setAppState('SYSTEMATIZING');
       setCartridge(prev => ({ ...prev, status: 'SYSTEMATIZING' }));
-      setShowArchive(false); // Ensure archive is closed if coming from there
+      setShowArchive(false);
   };
 
   const handleStartTechTask = () => {
-      // Initialize a new cartridge in TECH_TASK mode
       setCartridge(createEmptyCartridge('TECH_TASK'));
       setAppState('SYSTEMATIZING');
       setShowCalendar(false);
@@ -264,7 +320,6 @@ const App: React.FC = () => {
   const handleNextLevel = () => {
     if (levelIndex >= 2) {
         setAppState('VICTORY');
-        // Reset or show credits
         setCartridge(prev => ({ ...prev, status: 'COMPLETE' }));
     } else {
         setLevelIndex(prev => prev + 1);
@@ -280,10 +335,22 @@ const App: React.FC = () => {
       setAppState('SYSTEMATIZING');
       setCartridge(prev => ({ ...prev, status: 'SYSTEMATIZING' }));
   };
+  
+  // Callback for Manifesto CTA to start the game immediately
+  const handleManifestoAction = () => {
+      setShowManifesto(false);
+      // If we are on landing page, focus the input or start the process
+      if (appState === 'SETUP') {
+        // Small delay to allow modal to close
+        setTimeout(() => {
+           handleInsertMind();
+        }, 300);
+      }
+  };
 
   const renderCarouselContent = () => {
     switch (carouselIndex) {
-        case 0: // TUTORIAL
+        case 0:
             return (
                 <div className="w-full flex flex-col gap-2 font-mono text-[10px] justify-center h-full px-1">
                      <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2">
@@ -301,7 +368,7 @@ const App: React.FC = () => {
                      </div>
                 </div>
             );
-        case 1: // ARCADE
+        case 1:
             return (
                 <div className="w-full flex flex-col gap-2 font-mono text-[10px] justify-center h-full px-1">
                      <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2">
@@ -319,7 +386,7 @@ const App: React.FC = () => {
                      </div>
                 </div>
             );
-        case 2: // BOSS RAID
+        case 2:
             return (
                 <div className="w-full flex flex-col gap-2 font-mono text-[10px] justify-center h-full px-1">
                      <div className="flex justify-between items-center border-b border-[var(--line-soft)] pb-2">
@@ -342,7 +409,6 @@ const App: React.FC = () => {
     }
 };
 
-  // Intro Animation Handlers
   const handleIntroImpact = useCallback(() => setUiVisible(true), []);
   const handleIntroComplete = useCallback(() => setShowIntro(false), []);
 
@@ -352,14 +418,14 @@ const App: React.FC = () => {
       <WebViewWarner status={connectionStatus} appName={detectedApp} />
 
       {/* HEADER */}
-      <Header onCalendarClick={() => setShowCalendar(true)} />
+      <Header onCalendarClick={() => setShowCalendar(true)} isLanding={appState === 'SETUP'} />
 
       {/* Archive Modal */}
       {showArchive && (
         <SystemArchive 
             onClose={() => {
                 setShowArchive(false);
-                setInitialDossierId(null); // Reset deep link
+                setInitialDossierId(null);
             }}
             onOpenCalendar={() => {
                 setShowArchive(false);
@@ -379,6 +445,26 @@ const App: React.FC = () => {
           />
       )}
 
+      {/* Manifesto Modal (Full Screen Overlay) */}
+      {showManifesto && (
+          <div className="fixed inset-0 z-[110] bg-[var(--bg-void)]/98 backdrop-blur-xl overflow-y-auto animate-in fade-in duration-300">
+               <div className="min-h-full flex items-center justify-center p-4">
+                    <div className="relative w-full max-w-4xl">
+                         <button 
+                            onClick={() => setShowManifesto(false)}
+                            className="absolute top-0 right-0 p-2 text-[var(--text-muted)] hover:text-white transition-colors z-50"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                        <ManifestoSection 
+                            showFullManifesto={true} 
+                            onAction={handleManifestoAction}
+                        />
+                    </div>
+               </div>
+          </div>
+      )}
+
       {/* Intro Overlay */}
       {showIntro && <IntroAnimation onImpact={handleIntroImpact} onComplete={handleIntroComplete} />}
 
@@ -396,7 +482,7 @@ const App: React.FC = () => {
 
           {/* --- STATE: LANDING PAGE (SETUP) --- */}
           {appState === 'SETUP' && (
-            <div className="w-full h-full relative z-10 flex flex-col items-center justify-between py-4 px-3 md:py-8 md:px-8 animate-in fade-in duration-700">
+            <div className="w-full h-full relative z-10 flex flex-col items-center justify-between py-4 px-3 md:py-8 md:px-8 animate-in fade-in duration-700 overflow-y-auto">
                  
                  {/* 1. HERO TEXT */}
                  <div className="text-center shrink-0 mb-1 w-full max-w-full">
@@ -408,9 +494,9 @@ const App: React.FC = () => {
                      </h1>
                  </div>
 
-                 {/* 2. 4D SYSTEM ENGINE VISUALIZER */}
-                 <div className="flex-1 w-full max-w-xl min-h-0 flex flex-col justify-center my-2">
-                    <div className="w-full h-full max-h-full border-2 border-[var(--accent-topaz-500)] bg-[rgba(245,158,11,0.03)] rounded relative overflow-hidden flex flex-col shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                 {/* 2. 4D SYSTEM ENGINE VISUALIZER (RESTORED) */}
+                 <div className="flex-1 w-full max-w-xl min-h-0 flex flex-col justify-center my-2 shrink-0">
+                    <div className="w-full h-full max-h-[400px] border-2 border-[var(--accent-topaz-500)] bg-[rgba(245,158,11,0.03)] rounded relative overflow-hidden flex flex-col shadow-[0_0_20px_rgba(245,158,11,0.1)]">
                         <div className="bg-[rgba(245,158,11,0.1)] border-b border-[var(--accent-topaz-500)] p-2 text-center shrink-0">
                             <div className="font-mono text-[10px] md:text-sm text-[var(--accent-topaz-500)] tracking-widest font-bold uppercase flex items-center justify-center gap-2">
                                 <span className="animate-pulse">⚡</span> GAME SETUP
@@ -464,6 +550,7 @@ const App: React.FC = () => {
                  {/* 3. INSERT MIND BUTTON */}
                  <div className="w-full max-w-md z-30 shrink-0 mt-2 mb-2">
                      <button 
+                        ref={insertMindInputRef}
                         onClick={handleInsertMind} 
                         className="w-full py-4 md:py-5 bg-[var(--accent-amethyst-500)] text-[var(--text-inverse)] font-display font-bold text-3xl md:text-4xl rounded shadow-[0_0_30px_rgba(157,78,221,0.5)] hover:bg-[var(--accent-amethyst-500)]/90 hover:scale-[1.02] transition-all active:scale-95 border border-[var(--border-glow)] tracking-widest relative overflow-hidden group"
                      >
@@ -472,9 +559,14 @@ const App: React.FC = () => {
                          </span>
                          <div className="absolute inset-0 bg-white/30 translate-x-[-100%] group-hover:text-white transition-transform duration-500 ease-in-out skew-x-12"></div>
                      </button>
-                     <div className="text-[9px] md:text-xs text-center uppercase tracking-widest text-[var(--accent-ruby-500)] font-mono mt-2 opacity-80">
-                        * MUST BE A BEST PROJECT IN YOUR LIFE *
+                     
+                     {/* MANIFESTO TOGGLE (Refined Footer Trigger) */}
+                     <div className="mt-4 text-center cursor-pointer group" onClick={() => setShowManifesto(true)}>
+                         <span className="font-mono text-[10px] md:text-xs text-[var(--accent-ruby-500)] group-hover:text-[var(--accent-ruby-300)] transition-colors uppercase tracking-wider flex items-center justify-center gap-2 hover:underline decoration-[var(--accent-ruby-500)] underline-offset-4">
+                            * ARCHITECT YOUR LEGACY *
+                         </span>
                      </div>
+
                      <div className="mt-2 text-center cursor-pointer group" onClick={() => setShowArchive(true)}>
                          <span className="font-mono text-[10px] md:text-xs text-[var(--text-muted)] group-hover:text-[var(--accent-topaz-500)] transition-colors uppercase tracking-wider">
                              ⚓ RAID VICTORIES_ (PORTFOLIO)
@@ -502,7 +594,7 @@ const App: React.FC = () => {
           {/* --- STATE: GAMEPLAY (REWARD) --- */}
           {appState === 'GAMEPLAY' && (
              <div className="relative z-10 w-full h-full flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-500">
-                 <div className="w-full h-full max-w-6xl max-h-full">
+                 <div className="w-full h-full max-h-full max-w-6xl">
                      <GameCanvas 
                         appState="PLAYING"
                         difficulty={difficulty}

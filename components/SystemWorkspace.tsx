@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -199,8 +200,35 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
             // 2. Call Gemini (Ambika)
             const result = await chatWithManagerAgent(isSystemTrigger ? "Initialize Ambika." : textToSend, tempState);
             
-            // 3. Update History
-            const updatedHistory = [...newHistory, { role: 'model' as const, content: result.text }];
+            // --- VARIANT A: RESPONSE FORMATTER LOGIC ---
+            // The backend sends { response: "...", updates: {...} } often wrapped in markdown.
+            // If the service layer failed to parse it, we get the raw string. We must parse it here
+            // to separate the narrative (for the user) from the logic (for the system).
+            
+            let narrativeText = result.text;
+            let systemUpdates = result.updatedCartridge;
+
+            // Heuristic: Does it look like JSON?
+            const isJsonLike = narrativeText.trim().startsWith('{') || narrativeText.includes('```json');
+            
+            if (isJsonLike) {
+                try {
+                    const clean = narrativeText.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(clean);
+                    
+                    if (parsed.response) {
+                        narrativeText = parsed.response;
+                        systemUpdates = { ...systemUpdates, ...parsed.updates };
+                        console.log("⚡ Response Formatter: Extracted narrative & updates");
+                    }
+                } catch (e) {
+                    console.warn("Response Formatter: Parsing failed, displaying raw text.", e);
+                }
+            }
+            // -------------------------------------------
+
+            // 3. Update History with clean narrative
+            const updatedHistory = [...newHistory, { role: 'model' as const, content: narrativeText }];
             
             // 4. CHECK FOR TURN 5 HINT (Persistent Logic)
             const userTurns = updatedHistory.filter(m => m.role === 'user').length;
@@ -213,7 +241,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
 
             // 5. Deep merge the updates
             const nextState = updateCartridgeProgress(tempState, {
-                ...result.updatedCartridge,
+                ...systemUpdates,
                 chatHistory: updatedHistory
             });
             
