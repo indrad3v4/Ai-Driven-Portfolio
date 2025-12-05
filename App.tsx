@@ -21,6 +21,7 @@ import { useGamePortal } from './hooks/useGamePortal';
 import Logo from './components/Logo';
 import { ManifestoSection } from './components/ManifestoSection';
 import { injectJsonLd, getSEOConfig, generateMetaTags, applyDOMMetaTags } from './lib/seo';
+import ConnectionRequest from './components/ConnectionRequest';
 
 // --- REUSABLE COMPONENTS ---
 
@@ -202,8 +203,12 @@ const App: React.FC = () => {
   const { cartridge, setCartridge, portalActive, deactivatePortal } = useGamePortal();
   
   const [appState, setAppState] = useState<AppState>('SETUP');
+  
+  // UX PHASE STATES
   const [showIntro, setShowIntro] = useState(true);
+  const [showConnectionRequest, setShowConnectionRequest] = useState(false);
   const [uiVisible, setUiVisible] = useState(false);
+  
   const [showArchive, setShowArchive] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -264,8 +269,6 @@ const App: React.FC = () => {
       
       if (match) {
           setDetectedApp(match.name);
-          // DISABLE PREEMPTIVE WARNING. We trust the proxy now.
-          // setConnectionStatus('WARNING'); 
       }
 
       // 2. Check for Deep Linking
@@ -274,7 +277,9 @@ const App: React.FC = () => {
       if (portfolioId) {
           setInitialDossierId(portfolioId);
           setShowArchive(true);
+          // If deep linked, skip intros
           setShowIntro(false);
+          setShowConnectionRequest(false);
           setUiVisible(true);
       }
   }, []);
@@ -344,7 +349,6 @@ const App: React.FC = () => {
       setShowManifesto(false);
       // If we are on landing page, focus the input or start the process
       if (appState === 'SETUP') {
-        // Small delay to allow modal to close
         setTimeout(() => {
            handleInsertMind();
         }, 300);
@@ -412,8 +416,20 @@ const App: React.FC = () => {
     }
 };
 
-  const handleIntroImpact = useCallback(() => setUiVisible(true), []);
-  const handleIntroComplete = useCallback(() => setShowIntro(false), []);
+  const handleIntroImpact = useCallback(() => {
+     // Intro impact (shatter) happens, but we wait for complete before showing UI
+  }, []);
+
+  const handleIntroComplete = useCallback(() => {
+      setShowIntro(false);
+      // Instead of showing UI immediately, show the Connection Request
+      setShowConnectionRequest(true);
+  }, []);
+
+  const handleConnectionAccepted = useCallback(() => {
+      setShowConnectionRequest(false);
+      setUiVisible(true);
+  }, []);
 
   return (
     <div className="relative h-dvh w-full flex flex-col overflow-hidden bg-[var(--bg-void)] font-body text-[var(--text-primary)]">
@@ -470,6 +486,9 @@ const App: React.FC = () => {
 
       {/* Intro Overlay */}
       {showIntro && <IntroAnimation onImpact={handleIntroImpact} onComplete={handleIntroComplete} />}
+
+      {/* Connection Request Overlay (The "Disclaimer") */}
+      {showConnectionRequest && <ConnectionRequest onProceed={handleConnectionAccepted} />}
 
       {/* MAIN CONTENT CONTAINER */}
       <div className={`flex-1 relative w-full h-full overflow-hidden p-2 md:p-4 transition-all duration-[2000ms] ease-[cubic-bezier(0.16,1,0.3,1)] origin-center ${uiVisible ? 'scale-100 opacity-100' : 'scale-0 opacity-0 blur-3xl'}`}>

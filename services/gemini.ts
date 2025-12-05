@@ -2,31 +2,43 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { GoogleGenAI, Modality, Type } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { InsightCartridge } from "../lib/insight-object";
 import { LevelStats } from "../types";
 
-// Ensure API key is present
-if (!process.env.API_KEY) {
-  console.error("Missing API_KEY environment variable.");
+// Initialize the SDK directly using the environment variable
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Helper to safely extract text from SDK response
+function extractText(response: GenerateContentResponse): string {
+    return response.text || "";
 }
 
-const createAIClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// --- EXISTING FUNCTIONS ---
+// Helper to safely extract inline image data from SDK response
+function extractImage(response: GenerateContentResponse): { data: string, mimeType: string } | null {
+    if (!response.candidates?.[0]?.content?.parts) return null;
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            return {
+                data: part.inlineData.data,
+                mimeType: part.inlineData.mimeType || 'image/png'
+            };
+        }
+    }
+    return null;
+}
 
 export async function getTrendingAIKeywords(): Promise<string[]> {
-    const ai = createAIClient();
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: "What are the top 3 trending AI systematization or agentic workflow trends in 2025? Return just the keywords or short phrases, separated by commas. No intro/outro.",
             config: {
-                tools: [{ googleSearch: {} }],
+                tools: [{ googleSearch: {} }]
             }
         });
 
-        const text = response.text || "";
+        const text = extractText(response);
         const keywords = text.split(',').map(s => s.trim().replace(/\.$/, ''));
         return keywords.length > 0 ? keywords : ["AI Agents", "Vision Execution", "Systematization"];
     } catch (e) {
@@ -36,7 +48,6 @@ export async function getTrendingAIKeywords(): Promise<string[]> {
 }
 
 export async function getLocationContext(lat: number, lng: number): Promise<string> {
-    const ai = createAIClient();
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -53,7 +64,8 @@ export async function getLocationContext(lat: number, lng: number): Promise<stri
                 }
             }
         });
-        return response.text || "Unknown Sector";
+        
+        return extractText(response) || "Unknown Sector";
     } catch (e) {
         console.warn("Location context failed", e);
         return "Unknown Sector";
@@ -61,16 +73,13 @@ export async function getLocationContext(lat: number, lng: number): Promise<stri
 }
 
 export async function getGameStrategyTip(currentLevel: number, difficulty: string): Promise<string> {
-    const ai = createAIClient();
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
-            contents: `The user is playing a Pacman-style retro arcade game. Level: ${currentLevel}, Difficulty: ${difficulty}. Provide a single, short, cryptic but helpful pro-tip for survival. Under 20 words.`,
-            config: {
-                thinkingConfig: { thinkingBudget: 1024 },
-            }
-        });
-        return response.text || "STAY MOVING.";
+            model: 'gemini-2.5-flash',
+            contents: `The user is playing a Pacman-style retro arcade game. Level: ${currentLevel}, Difficulty: ${difficulty}. Provide a single, short, cryptic but helpful pro-tip for survival. Under 20 words.`
+        }); 
+        
+        return extractText(response) || "STAY MOVING.";
     } catch (e) {
         console.warn("Failed to generate strategy tip", e);
         return "TRUST YOUR INSTINCTS.";
@@ -82,30 +91,21 @@ export async function editArcadeSprite(
     mimeType: string,
     userPrompt: string
 ): Promise<{ data: string; mimeType: string }> {
-    const ai = createAIClient();
     const systemPrompt = "You are a pixel art editor. Maintain the retro 8-bit aesthetic. Keep the white background. Do not add borders. Modify the character based on the user's instruction.";
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image', 
+            model: 'gemini-2.5-flash-image',
             contents: {
                 parts: [
                     { inlineData: { data: imageBase64, mimeType } },
                     { text: `${systemPrompt} Instruction: ${userPrompt}` },
-                ],
-            },
-            config: {
-                responseModalities: [Modality.IMAGE],
-            },
+                ]
+            }
         });
 
-        const part = response.candidates?.[0]?.content?.parts?.[0];
-        if (part && part.inlineData && part.inlineData.data) {
-            return {
-                data: part.inlineData.data,
-                mimeType: part.inlineData.mimeType || 'image/png',
-            };
-        }
+        const img = extractImage(response);
+        if (img) return img;
         throw new Error("No image data returned.");
     } catch (e) {
         console.error("Sprite edit failed", e);
@@ -118,7 +118,6 @@ export async function generateArcadeSprite(
   mimeType: string,
   spriteType: 'PLAYER' | 'VILLAIN'
 ): Promise<{ data: string; mimeType: string }> {
-  const ai = createAIClient();
   const promptStr = spriteType === 'PLAYER'
     ? "Generate a single 8-bit pixel art sprite of this character in a neutral ready stance (side view). Full body visible. Legs must be clearly defined. Centered on a solid WHITE (#FFFFFF) background. High contrast. Thick black pixel-art outlines. No shadows. No borders. No frames. No vignette. Do not generate a run pose. Do not generate multiple frames."
     : "Generate a single 8-bit pixel art sprite of this villain in a floating, menacing pose (front/side view). The character should look like a retro arcade villain. Full body visible. Centered on a solid WHITE (#FFFFFF) background. High contrast. Thick black pixel-art outlines. No borders. No frames. Do not generate multiple frames.";
@@ -126,27 +125,18 @@ export async function generateArcadeSprite(
   let lastError;
   for (let i = 0; i < 3; i++) {
     try {
-      // Using Flash Image for stability and speed
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [
-            { inlineData: { data: imageBase64, mimeType: mimeType } },
-            { text: promptStr },
-          ],
-        },
-        config: {
-          responseModalities: [Modality.IMAGE],
-        },
+            parts: [
+                { inlineData: { data: imageBase64, mimeType: mimeType } },
+                { text: promptStr },
+            ]
+        }
       });
 
-      const part = response.candidates?.[0]?.content?.parts?.[0];
-      if (part && part.inlineData && part.inlineData.data) {
-        return {
-          data: part.inlineData.data,
-          mimeType: part.inlineData.mimeType || 'image/png',
-        };
-      }
+      const img = extractImage(response);
+      if (img) return img;
     } catch (e) {
       console.warn(`Sprite generation attempt ${i + 1} failed:`, e);
       lastError = e;
@@ -160,7 +150,6 @@ export async function generateBattleScene(
     heroImageB64: string,
     villainImageB64: string
   ): Promise<{ data: string; mimeType: string }> {
-    const ai = createAIClient();
     const promptStr = `Create a dramatic, vibrant, 80s retro comic book cover style illustration titled 'VERSUS'. 
     Image 1 is the HERO (draw on left). Image 2 is the VILLAIN (draw on right). 
     CRITICAL INSTRUCTIONS: 
@@ -171,28 +160,19 @@ export async function generateBattleScene(
     Use heavy black ink outlines, halftones, and bold vintage colors.`;
   
     try {
-      // Using Flash Image for stability
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [
-            { inlineData: { data: heroImageB64, mimeType: 'image/png' } },
-            { inlineData: { data: villainImageB64, mimeType: 'image/png' } },
-            { text: promptStr },
-          ],
-        },
-        config: {
-          responseModalities: [Modality.IMAGE],
-        },
+            parts: [
+                { inlineData: { data: heroImageB64, mimeType: 'image/png' } },
+                { inlineData: { data: villainImageB64, mimeType: 'image/png' } },
+                { text: promptStr },
+            ]
+        }
       });
     
-      const part = response.candidates?.[0]?.content?.parts?.[0];
-      if (part && part.inlineData && part.inlineData.data) {
-          return {
-              data: part.inlineData.data,
-              mimeType: part.inlineData.mimeType || 'image/png',
-          };
-      }
+      const img = extractImage(response);
+      if (img) return img;
       throw new Error("No image generated.");
     } catch (e) {
         console.error("Battle scene generation failed", e);
@@ -205,7 +185,6 @@ export async function generateLevelRecap(
     playerImageB64: string | null,
     villainImageB64: string | null
 ): Promise<{ data: string; mimeType: string }> {
-    const ai = createAIClient();
     const prompt = `Generate a retro arcade 'MISSION DEBRIEF' screen illustration. 8-bit or 16-bit pixel art style. 
     The image should depict a tactical screen showing the result: ${stats.isWin ? "VICTORY" : "GAME OVER"}.
     Score: ${stats.score}. Grade: ${stats.grade}.
@@ -224,16 +203,11 @@ export async function generateLevelRecap(
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: { parts },
-            config: { responseModalities: [Modality.IMAGE] }
+            contents: { parts }
         });
-        const part = response.candidates?.[0]?.content?.parts?.[0];
-        if (part?.inlineData?.data) {
-            return {
-                data: part.inlineData.data,
-                mimeType: part.inlineData.mimeType || 'image/png'
-            };
-        }
+        
+        const img = extractImage(response);
+        if (img) return img;
         throw new Error("No recap image generated");
     } catch (e) {
         console.error("Recap generation failed", e);
@@ -245,7 +219,6 @@ export async function chatWithManagerAgent(
     message: string,
     cartridge: InsightCartridge
 ): Promise<{ text: string, updatedCartridge: Partial<InsightCartridge>, error?: string }> {
-    const ai = createAIClient();
     
     // Construct context
     const context = `
@@ -270,13 +243,13 @@ export async function chatWithManagerAgent(
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: context,
-            config: {
-                responseMimeType: 'application/json'
-            }
+            config: { responseMimeType: 'application/json' }
         });
         
-        const jsonText = response.text || "{}";
-        const parsed = JSON.parse(jsonText);
+        const jsonStr = extractText(response) || "{}";
+        // Handle potential markdown wrapping of JSON
+        const cleanJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
         
         return {
             text: parsed.response || "System processed.",
@@ -296,7 +269,6 @@ export async function chatWithManagerAgent(
 export async function systematizeInsight(
     cartridge: InsightCartridge
 ): Promise<Partial<InsightCartridge>> {
-    const ai = createAIClient();
     const prompt = `
     Analyze this system state and provide percentage completion (0-100) for each quadrant based on completeness of definitions.
     Hero: ${cartridge.hero.description}
@@ -312,8 +284,10 @@ export async function systematizeInsight(
             contents: prompt,
             config: { responseMimeType: 'application/json' }
         });
-        const parsed = JSON.parse(response.text || "{}");
-        return parsed;
+
+        const jsonStr = extractText(response) || "{}";
+        const cleanJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleanJson);
     } catch (e) {
         console.error("Systematization failed", e);
         return {};
@@ -321,21 +295,14 @@ export async function systematizeInsight(
 }
 
 export async function generateNanoBananaImage(): Promise<{ data: string; mimeType: string }> {
-    const ai = createAIClient();
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
-            contents: "Generate a cool, cyberpunk pixel art banana floating in a digital void. Glowing neon yellow. 8-bit style.",
-            config: { responseModalities: [Modality.IMAGE] }
+            contents: "Generate a cool, cyberpunk pixel art banana floating in a digital void. Glowing neon yellow. 8-bit style."
         });
         
-        const part = response.candidates?.[0]?.content?.parts?.[0];
-        if (part?.inlineData?.data) {
-            return {
-                data: part.inlineData.data,
-                mimeType: part.inlineData.mimeType || 'image/png'
-            };
-        }
+        const img = extractImage(response);
+        if (img) return img;
         throw new Error("No image generated");
     } catch (e) {
         console.error("NanoBanana failed", e);

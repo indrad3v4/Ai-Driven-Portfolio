@@ -1,3 +1,4 @@
+
 {
   "name": "functions",
   "scripts": {
@@ -15,8 +16,6 @@
   "dependencies": {
     "firebase-admin": "^11.8.0",
     "firebase-functions": "^4.3.1",
-    "cors": "^2.8.5",
-    "node-fetch": "^2.6.7",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {

@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -53,12 +52,24 @@ export interface TechTaskData {
     };
 }
 
+export interface TrizStage {
+    id: number;
+    name: string;
+    status: 'PENDING' | 'ANALYZING' | 'COMPLETE';
+}
+
+export interface TrizData {
+    currentStage: number; // 0-8
+    stages: TrizStage[];
+    problemStatement: string;
+}
+
 export interface InsightCartridge {
     id: string;
     userName?: string;    // The Architect's name
     credits: number;      // Economy resource (1.0 per turn)
     
-    mode: 'GAME' | 'TECH_TASK'; // NEW: Operation Mode
+    mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER'; // NEW: Operation Mode
 
     hero: Character;      // Driver (Emerald Energy)
     villain: Character;   // Barrier (Ruby Energy)
@@ -74,6 +85,9 @@ export interface InsightCartridge {
 
     // Technical Specification Data (TECH_TASK MODE)
     techTask?: TechTaskData;
+
+    // TRIZ Solver Data (TRIZ_SOLVER MODE)
+    triz?: TrizData;
     
     chatHistory: { role: 'user' | 'model' | 'system', content: string }[];
     systemSpec: SystemSpec | null; // The "Saved Code" artifact
@@ -82,7 +96,7 @@ export interface InsightCartridge {
     cabinetUnlocked: boolean; // Tracks if user has entered the secret code
 }
 
-export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' = 'GAME'): InsightCartridge => ({
+export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' = 'GAME'): InsightCartridge => ({
     id: crypto.randomUUID(),
     credits: 20, // ~20 free turns @ 1.0 credits/turn
     mode: mode,
@@ -114,6 +128,21 @@ export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' = 'GAME'): Insig
         roles: { status: 'PENDING', content: '' },
         admin: { status: 'PENDING', content: '' }
     } : undefined,
+    triz: mode === 'TRIZ_SOLVER' ? {
+        currentStage: 0,
+        problemStatement: '',
+        stages: [
+            { id: 0, name: 'INPUT DATA', status: 'PENDING' },
+            { id: 1, name: 'BASE MODELS', status: 'PENDING' },
+            { id: 2, name: 'INTERPRETATION', status: 'PENDING' },
+            { id: 3, name: 'OPERATIONS', status: 'PENDING' },
+            { id: 4, name: 'PSYCHOLOGY', status: 'PENDING' },
+            { id: 5, name: 'IMAGINATION', status: 'PENDING' },
+            { id: 6, name: 'TASK FORMULATION', status: 'PENDING' },
+            { id: 7, name: 'ALGORITHMS', status: 'PENDING' },
+            { id: 8, name: 'DEPLOYMENT', status: 'PENDING' }
+        ]
+    } : undefined,
     chatHistory: [],
     systemSpec: null,
     status: 'EMPTY',
@@ -137,21 +166,8 @@ export const updateCartridgeProgress = (
             strategy: { ...cartridge.quadrants.strategy, ...(delta.quadrants?.strategy || {}) },
             creative: { ...cartridge.quadrants.creative, ...(delta.quadrants?.creative || {}) },
             producing: { ...cartridge.quadrants.producing, ...(delta.quadrants?.producing || {}) },
-            media: { ...cartridge.quadrants.media, ...(delta.quadrants?.media || {}) },
+            media: { ...cartridge.quadrants.media, ...(delta.quadrants?.media || {}) }
         }
     };
-
-    if (cartridge.techTask || delta.techTask) {
-        updated.techTask = {
-            projectUrl: delta.techTask?.projectUrl || cartridge.techTask?.projectUrl,
-            generalInfo: { ...(cartridge.techTask?.generalInfo || {}), ...(delta.techTask?.generalInfo || {}) } as TechSection,
-            techStack: { ...(cartridge.techTask?.techStack || {}), ...(delta.techTask?.techStack || {}) } as TechSection,
-            structure: { ...(cartridge.techTask?.structure || {}), ...(delta.techTask?.structure || {}) } as TechSection,
-            roles: { ...(cartridge.techTask?.roles || {}), ...(delta.techTask?.roles || {}) } as TechSection,
-            admin: { ...(cartridge.techTask?.admin || {}), ...(delta.techTask?.admin || {}) } as TechSection,
-            estimation: delta.techTask?.estimation || cartridge.techTask?.estimation
-        };
-    }
-
     return updated;
 };
