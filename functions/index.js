@@ -27,7 +27,7 @@ exports.proxy_gemini = functions.region('us-central1').https.onRequest(async (re
   }
 
   // ==================================================================
-  // 2. REQUEST VALIDATION & BODY PARSING
+  // 2. REQUEST VALIDATION & BODY PARSING (TRIZ: THE OMNIVORE ADAPTER)
   // ==================================================================
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method Not Allowed" });
@@ -35,17 +35,26 @@ exports.proxy_gemini = functions.region('us-central1').https.onRequest(async (re
   }
 
   try {
-    console.log("VERSION: DIRECT_RUN_V5_ROBUST [START]");
+    console.log("VERSION: DIRECT_RUN_V6_SOCIAL_FIX [START]");
 
-    // TRIZ FIX: Social Browsers sometimes strip 'Content-Type: application/json'
-    // forcing Firebase to treat body as string/buffer. We manually parse it here.
+    // TRIZ FIX: Social Browsers (IG/Telegram) often strip 'Content-Type: application/json'
+    // forcing Firebase to treat the body as a raw string or buffer.
+    // We apply Principle 10 (Preliminary Action) to sanitize inputs before use.
     let parsedBody = req.body;
+
+    // If body is a string (because Content-Type was stripped), force parse it.
     if (typeof parsedBody === 'string') {
         try {
+            console.log("[Proxy] Raw string body detected. Manually parsing.");
             parsedBody = JSON.parse(parsedBody);
         } catch (e) {
-            console.warn("Failed to parse string body, proceeding raw:", e);
+            console.warn("[Proxy] Failed to parse string body. Proceeding raw.", e);
         }
+    }
+
+    // If body is empty (common in some strict WebViews), initialize empty object
+    if (!parsedBody) {
+        parsedBody = {};
     }
 
     // ==================================================================
@@ -85,9 +94,10 @@ exports.proxy_gemini = functions.region('us-central1').https.onRequest(async (re
         delete geminiBody.prompt;
     }
 
+    // Final Safety Check
     if (!geminiBody.contents) {
         console.error("Invalid Payload Structure:", JSON.stringify(geminiBody));
-        res.status(400).json({ error: "Invalid Payload", details: "Missing 'contents'" });
+        res.status(400).json({ error: "Invalid Payload", details: "Missing 'contents' - Social Browser may have stripped body." });
         return;
     }
 
@@ -119,7 +129,7 @@ exports.proxy_gemini = functions.region('us-central1').https.onRequest(async (re
         }
 
         // Success
-        console.log("VERSION: DIRECT_RUN_V5_ROBUST [SUCCESS]");
+        console.log("VERSION: DIRECT_RUN_V6_SOCIAL_FIX [SUCCESS]");
         res.json(data);
 
     } catch (fetchError) {

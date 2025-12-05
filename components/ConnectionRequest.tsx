@@ -10,7 +10,7 @@ interface Props {
   onProceed: () => void;
 }
 
-type Language = 'EN' | 'PL' | 'BE';
+type Language = 'EN' | 'PL' | 'BEL';
 
 const COPY = {
   EN: {
@@ -35,7 +35,7 @@ const COPY = {
     outro: "Jeśli masz pytania lub chcesz wyskoczyć na herbatę w Krakowie – napisz do mnie na dowolnym kanale poniżej.",
     cta: "INICJUJ POŁĄCZENIE"
   },
-  BE: {
+  BEL: {
     headline: "ЗАПЫТ НА ЗЛУЧЭННЕ...",
     intro: "Прывітанне, я **indradev_**. Я Python AI інжынер з больш чым 5-гадовым досведам, зараз жыву ў Кракаве. Гэта маё інтэрактыўнае партфоліо, і вы бачыце яго, бо я адкрыты да новых праектаў.",
     bullets: [
@@ -86,6 +86,20 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed }) => {
     );
   };
 
+  const LangButton = ({ code, icon, isActive, onClick }: { code: string, icon: React.ReactNode, isActive: boolean, onClick: () => void }) => (
+    <button 
+      onClick={onClick} 
+      className={`flex flex-col items-center justify-center p-2 rounded min-w-[3.5rem] transition-all duration-200 border ${
+        isActive 
+          ? 'bg-[var(--accent-amethyst-500)] text-white border-[var(--accent-amethyst-500)] shadow-[0_0_10px_rgba(157,78,221,0.4)] scale-105' 
+          : 'bg-[var(--bg-void)] text-[var(--text-muted)] border-[var(--line-soft)] hover:border-[var(--accent-amethyst-500)] hover:text-white'
+      }`}
+    >
+      <span className="text-[10px] font-mono font-bold tracking-widest mb-1">{code}</span>
+      <span className="text-lg leading-none">{icon}</span>
+    </button>
+  );
+
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--bg-void)] p-4">
       {/* Background Matrix/Grid Effect */}
@@ -96,22 +110,34 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed }) => {
       <div className={`relative max-w-2xl w-full bg-[var(--bg-surface)]/80 backdrop-blur-xl border border-[var(--accent-amethyst-500)] shadow-[0_0_50px_rgba(157,78,221,0.2)] rounded-[var(--radius-lg)] overflow-hidden transition-all duration-700 transform ${isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-10'}`}>
         
         {/* Header Bar */}
-        <div className="flex justify-between items-center p-4 border-b border-[var(--line-soft)] bg-[var(--bg-overlay)]">
-          <div className="flex items-center gap-2">
+        <div className="flex justify-between items-start md:items-center p-4 border-b border-[var(--line-soft)] bg-[var(--bg-overlay)]">
+          <div className="flex items-center gap-2 mt-2 md:mt-0">
             <div className="w-2 h-2 rounded-full bg-[var(--accent-emerald-500)] animate-pulse"></div>
             <span className="font-mono text-[10px] md:text-xs text-[var(--accent-emerald-500)] tracking-widest uppercase">
               {currentCopy.headline}
             </span>
           </div>
           
-          {/* Language Selector */}
+          {/* Language Selector - Vertical Stack Style */}
           <div className="flex gap-2">
-            <button onClick={() => setLang('EN')} className={`px-2 py-1 rounded text-[10px] font-mono transition-all ${lang === 'EN' ? 'bg-[var(--accent-amethyst-500)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}>EN 🌐</button>
-            <button onClick={() => setLang('PL')} className={`px-2 py-1 rounded text-[10px] font-mono transition-all ${lang === 'PL' ? 'bg-[var(--accent-amethyst-500)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}>PL 🇵🇱</button>
-            <button onClick={() => setLang('BE')} className={`px-2 py-1 rounded text-[10px] font-mono transition-all flex items-center gap-1 ${lang === 'BE' ? 'bg-[var(--accent-amethyst-500)] text-white' : 'text-[var(--text-muted)] hover:text-white'}`}>
-              BE 
-              <span className="block w-4 h-2.5 border border-white/20" style={{ background: 'linear-gradient(to bottom, #ffffff 33%, #ef4444 33%, #ef4444 66%, #ffffff 66%)' }}></span>
-            </button>
+            <LangButton 
+              code="EN" 
+              icon="🌐" 
+              isActive={lang === 'EN'} 
+              onClick={() => setLang('EN')} 
+            />
+            <LangButton 
+              code="PL" 
+              icon="🇵🇱" 
+              isActive={lang === 'PL'} 
+              onClick={() => setLang('PL')} 
+            />
+            <LangButton 
+              code="BEL" 
+              icon={<span className="block w-5 h-3 border border-white/20" style={{ background: 'linear-gradient(to bottom, #ffffff 33%, #ef4444 33%, #ef4444 66%, #ffffff 66%)' }}></span>}
+              isActive={lang === 'BEL'} 
+              onClick={() => setLang('BEL')} 
+            />
           </div>
         </div>
 
