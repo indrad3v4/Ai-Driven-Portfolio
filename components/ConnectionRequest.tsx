@@ -8,43 +8,48 @@ import RetroButton from './RetroButton';
 
 interface Props {
   onProceed: () => void;
+  language: 'EN' | 'PL' | 'BEL';
+  setLanguage: (l: 'EN' | 'PL' | 'BEL') => void;
 }
 
 type Language = 'EN' | 'PL' | 'BEL';
 
 const COPY = {
   EN: {
-    headline: "INCOMING CONNECTION REQUEST...",
-    intro: "Hi, I'm **indradev_**. I'm a Python AI Engineer with 5+ years of experience, currently based in Kraków. You are seeing this interactive portfolio because I am open to new projects.",
+    headline: "DISCLAIMER",
+    intro: "Hi, I'm **indradev_** — a Python AI Engineer with 5+ years of experience, based in Kraków. This is my interactive portfolio. Welcome to the experience.\n\n**Here's what you can do:**",
     bullets: [
-      { label: "TOP SECTOR", text: "Fill out a technical task with AI to generate a draft, then book time to discuss it. I will code it for you." },
-      { label: "CORE SECTOR", text: "Play the game to find inspiration or look at your goals from a new perspective." },
-      { label: "ARCHIVE", text: "Scroll down to find my manifesto and a collection of live AI/ML/DL systems and agents." }
+      { label: "1. ENTER PORTFOLIO", text: "Explore my collection of live AI/ML/DL systems and agents. Maybe your next project will be built here with me." },
+      { label: "2. PRESS START", text: "Play an AI-powered brainstorming game — like an MMORPG raid where you refine your vision with a swarm of agents. Find inspiration or see your goals from a fresh perspective." },
+      { label: "3. TECHNICAL MANIFESTO", text: "Have an existing system or task? Click \"Fill Technical Task\" in the header. My AI agent will help you draft a technical specification. We'll discuss it together at a scheduled time, and I'll code it for you." },
+      { label: "4. ARCHIVE", text: "Scroll down to explore my manifesto and a growing collection of live AI/ML/DL systems and agents." }
     ],
     outro: "If you have questions or want to meet in Kraków for tea, ping me on any frequency below.",
-    cta: "INITIALIZE LINK"
+    cta: "ENTER PORTFOLIO"
   },
   PL: {
-    headline: "PRZYCHODZĄCE POŁĄCZENIE...",
-    intro: "Cześć, tu **indradev_**. Jestem inżynierem AI (Python) z ponad 5-letnim doświadczeniem, obecnie mieszkam w Krakowie. Widzisz to interaktywne portfolio, ponieważ jestem otwarty na nowe projekty.",
+    headline: "DISCLAIMER",
+    intro: "Cześć, jestem **indradev_** — inżynier Python AI z ponad 5 latami doświadczenia, pracuję z Krakowa. To jest moje interaktywne portfolio. Witaj w doświadczeniu.\n\n**Oto, co możesz zrobić:**",
     bullets: [
-      { label: "GÓRA", text: "Opisz swoje zadanie techniczne przy pomocy AI, odbierz wstępny projekt i umów się na rozmowę. Zakoduję to dla Ciebie." },
-      { label: "ŚRODEK", text: "Zagraj w grę, aby znaleźć inspirację lub spojrzeć na swoje cele z innej perspektywy." },
-      { label: "DÓŁ", text: "Mój manifest oraz baza działających modeli i agentów AI/ML/DL." }
+      { label: "1. WEJDŹ DO PORTFOLIO", text: "Poznaj moją kolekcję żywych systemów AI/ML/DL i agentów. Może Twój następny projekt powstanie tutaj razem ze mną." },
+      { label: "2. NACIŚNIJ START", text: "Zagraj w grę brainstormingową napędzaną sztuczną inteligencją — jak rajd MMORPG, gdzie ulepszasz swoją wizję za pomocą roju agentów. Znajdź inspirację lub spójrz na swoje cele z nowej perspektywy." },
+      { label: "3. MANIFEST TECHNICZNY", text: "Masz istniejący system lub zadanie? Kliknij \"Wypełnij Zadanie Techniczne\" w nagłówku. Mój agent AI pomoże Ci sporządzić specyfikację techniczną. Omowimy ją razem w wybranym czasie, a ja napiszę kod dla Ciebie." },
+      { label: "4. ARCHIWUM", text: "Przewiń w dół, aby zapoznać się z moim manifestem i rosnącą kolekcją żywych systemów AI/ML/DL oraz agentów." }
     ],
     outro: "Jeśli masz pytania lub chcesz wyskoczyć na herbatę w Krakowie – napisz do mnie na dowolnym kanale poniżej.",
-    cta: "INICJUJ POŁĄCZENIE"
+    cta: "WEJDŹ DO PORTFOLIO"
   },
   BEL: {
-    headline: "ЗАПЫТ НА ЗЛУЧЭННЕ...",
-    intro: "Прывітанне, я **indradev_**. Я Python AI інжынер з больш чым 5-гадовым досведам, зараз жыву ў Кракаве. Гэта маё інтэрактыўнае партфоліо, і вы бачыце яго, бо я адкрыты да новых праектаў.",
+    headline: "DISCLAIMER",
+    intro: "Прывітанне, я **indradev_** — інженер Python AI з больш як 5 гадамі досведу, базіруюся ў Кракаве. Гэта маё інтэрактыўнае портфоліа. Вітаю!\n\n**Вось што ты можаш зрабіць:**",
     bullets: [
-      { label: "ЗВЕРХУ", text: "Апішыце сваю тэхнічную задачу з дапамогай ШІ, атрымайце чарнавік і забраніруйце час для абмеркавання. Я напішу гэты код для вас." },
-      { label: "У ЦЭНТРЫ", text: "Згуляйце ў гульню, каб знайсці натхненне ці паглядзець на свае мэты пад іншым вуглом." },
-      { label: "ЗНІЗУ", text: "Мой маніфест і калекцыя рэальных AI/ML/DL сістэм і агентаў." }
+      { label: "1. УВАХОД Ў ПОРТФОЛІА", text: "Даследуй мою калекцыю жывых сістэм AI/ML/DL і агентаў. Можа, твой наступны праект будзе створаны тут разам са мной." },
+      { label: "2. НАПІШ START", text: "Гуляй у гульню мозгавога штурму на базе штучнага інтэлекту — як рэйд у MMORPG, дзе ты раздьмухваеш сваю візію з дапамогай роя агентаў. Знайдзі натхненне ці паглядзі на свае мэты ў новым свеце." },
+      { label: "3. ТЭХНІЧНЫ МАНІФЕСТ", text: "У цябе ёсць наяўная сістэма ці задача? Клікні \"Запоўніць Тэхнічнае Заданне\" ў хэдаре. Мой агент AI дапаможа табе скласці тэхнічную спецыфікацыю. А пасля мы абмяркуем яе разам ва выбраны час, і я напішу код для цябе." },
+      { label: "4. АРХІЎ", text: "Скроль вніз, каб даследаваць мой маніфест і растучую кольекцыю жывых сістэм AI/ML/DL і агентаў." }
     ],
-    outro: "Калі ў вас ёсць пытанні ці вы хочаце сустрэцца на гарбату ў Кракаве — пішыце мне ў любы месенджар ніжэй.",
-    cta: "УВАЙСЦІ Ў СІСТЭМУ"
+    outro: "Калі ў цябе ёсць пытанні ці жадаеш сустрэцца на каву ў Кракаве — напішы мне ў адным з месенджараў ніжэй.",
+    cta: "УВАЙСЦІ Ў ПОРТФОЛІА"
   }
 };
 
@@ -58,8 +63,7 @@ const SOCIALS = [
   { name: "Reddit", url: "https://www.reddit.com/u/indradev4/s/e8ALcXbHsE", icon: "🤖" },
 ];
 
-const ConnectionRequest: React.FC<Props> = ({ onProceed }) => {
-  const [lang, setLang] = useState<Language>('EN');
+const ConnectionRequest: React.FC<Props> = ({ onProceed, language, setLanguage }) => {
   const [copied, setCopied] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -74,16 +78,23 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const currentCopy = COPY[lang];
+  const currentCopy = COPY[language];
 
-  // Helper to render markdown-like bolding
+  // Helper to render markdown-like bolding and newlines
   const renderText = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, i) => 
-      part.startsWith('**') 
-        ? <strong key={i} className="text-[var(--accent-amethyst-500)] font-normal">{part.slice(2, -2)}</strong> 
-        : part
-    );
+    // Split by newlines first to handle paragraphs
+    return text.split('\n').map((line, lineIdx) => {
+      const parts = line.split(/(\*\*.*?\*\*)/g);
+      return (
+        <span key={lineIdx} className="block min-h-[1em]">
+          {parts.map((part, i) => 
+            part.startsWith('**') 
+              ? <strong key={i} className="text-[var(--accent-amethyst-500)] font-normal">{part.slice(2, -2)}</strong> 
+              : part
+          )}
+        </span>
+      );
+    });
   };
 
   const LangButton = ({ code, icon, isActive, onClick }: { code: string, icon: React.ReactNode, isActive: boolean, onClick: () => void }) => (
@@ -123,20 +134,20 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed }) => {
             <LangButton 
               code="EN" 
               icon="🌐" 
-              isActive={lang === 'EN'} 
-              onClick={() => setLang('EN')} 
+              isActive={language === 'EN'} 
+              onClick={() => setLanguage('EN')} 
             />
             <LangButton 
               code="PL" 
               icon="🇵🇱" 
-              isActive={lang === 'PL'} 
-              onClick={() => setLang('PL')} 
+              isActive={language === 'PL'} 
+              onClick={() => setLanguage('PL')} 
             />
             <LangButton 
               code="BEL" 
               icon={<span className="block w-5 h-3 border border-white/20" style={{ background: 'linear-gradient(to bottom, #ffffff 33%, #ef4444 33%, #ef4444 66%, #ffffff 66%)' }}></span>}
-              isActive={lang === 'BEL'} 
-              onClick={() => setLang('BEL')} 
+              isActive={language === 'BEL'} 
+              onClick={() => setLanguage('BEL')} 
             />
           </div>
         </div>
@@ -145,12 +156,12 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed }) => {
         <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[60vh] md:max-h-none scrollbar-thin">
           
           {/* Intro */}
-          <p className="text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
+          <div className="text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
             {renderText(currentCopy.intro)}
-          </p>
+          </div>
 
-          {/* Bullets */}
-          <div className="space-y-3 pl-4 border-l-2 border-[var(--line-soft)]">
+          {/* Bullets (4 Steps) */}
+          <div className="space-y-4 pl-4 border-l-2 border-[var(--line-soft)]">
             {currentCopy.bullets.map((b, i) => (
               <div key={i} className="text-xs md:text-sm">
                 <span className="text-[var(--accent-topaz-500)] font-bold tracking-wider block mb-1">{b.label}</span>

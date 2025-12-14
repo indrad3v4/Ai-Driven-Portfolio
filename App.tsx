@@ -125,10 +125,23 @@ const WebViewWarner: React.FC<WebViewWarnerProps> = ({ status, appName }) => {
     return null;
 };
 
-// HEADER COMPONENT (INDRA AI BRANDING)
-const Header: React.FC<{ onCalendarClick: () => void, isLanding?: boolean }> = ({ onCalendarClick, isLanding = false }) => {
+// HEADER COMPONENT (INDRADEV_PORTFOLIO)
+interface HeaderProps { 
+    onCalendarClick: () => void; 
+    isLanding?: boolean;
+    language: 'EN' | 'PL' | 'BEL';
+    setLanguage: (l: 'EN' | 'PL' | 'BEL') => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onCalendarClick, isLanding = false, language, setLanguage }) => {
     const { theme, toggleTheme } = useTheme();
     
+    const HEADER_COPY = {
+        EN: { cta: "HAVE A TASK? FILL TECH SPEC" },
+        PL: { cta: "MASZ ZADANIE? WYPEŁNIJ SPEC" },
+        BEL: { cta: "ЁСЦЬ ЗАДАЧА? ЗАПОЛНІ SPEC" }
+    };
+
     return (
         <header className="h-14 flex items-center justify-between px-4 border-b border-[var(--line-soft)] bg-[var(--bg-void)]/90 backdrop-blur-md z-50 pointer-events-auto relative shrink-0">
             <div className="flex items-center gap-3">
@@ -136,12 +149,36 @@ const Header: React.FC<{ onCalendarClick: () => void, isLanding?: boolean }> = (
             </div>
             
             <div className="flex items-center gap-2">
+                 {/* Language Selector */}
+                 <div className="flex gap-1 mr-2 bg-[var(--bg-surface)] rounded-full p-1 border border-[var(--line-soft)]">
+                    {(['EN', 'PL', 'BEL'] as const).map(lang => (
+                        <button
+                            key={lang}
+                            onClick={() => setLanguage(lang)}
+                            className={`px-2 py-0.5 text-[10px] font-mono rounded-full transition-all ${language === lang ? 'bg-[var(--accent-amethyst-500)] text-white font-bold shadow-[0_0_10px_rgba(157,78,221,0.4)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                        >
+                            {lang}
+                        </button>
+                    ))}
+                 </div>
+
+                 {/* New Tech Spec CTA */}
                  <button
                     onClick={onCalendarClick}
-                    className="px-3 py-1 rounded-[var(--radius-full)] bg-[var(--bg-surface)] text-[var(--accent-emerald-500)] border border-[var(--border-soft)] hover:border-[var(--accent-emerald-500)] hover:shadow-[var(--shadow-glow-emerald)] transition-all font-mono text-[10px] font-bold tracking-wider flex items-center gap-2"
+                    className="hidden md:flex px-4 py-1.5 rounded-[var(--radius-full)] bg-[var(--bg-surface)] text-[var(--accent-sapphire-500)] border border-[var(--accent-sapphire-500)] hover:bg-[var(--accent-sapphire-500)] hover:text-white transition-all font-mono text-[10px] font-bold tracking-wider items-center gap-2 shadow-[0_0_10px_rgba(59,130,246,0.1)] hover:shadow-[0_0_15px_rgba(59,130,246,0.4)]"
+                    title="Jump straight to technical specification -> I'll code it"
                  >
-                    <span>📅</span> BOSS RAID
+                    <span>⚡</span> {HEADER_COPY[language].cta}
                  </button>
+
+                 {/* Mobile Icon Only */}
+                 <button
+                    onClick={onCalendarClick}
+                    className="md:hidden px-3 py-1 rounded-[var(--radius-full)] bg-[var(--bg-surface)] text-[var(--accent-sapphire-500)] border border-[var(--accent-sapphire-500)] hover:bg-[var(--accent-sapphire-500)] hover:text-white transition-all font-mono text-[10px] font-bold tracking-wider flex items-center gap-2"
+                 >
+                    <span>⚡</span> SPEC
+                 </button>
+
                  <button 
                     onClick={toggleTheme}
                     className="px-3 py-1 rounded-[var(--radius-full)] bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-soft)] hover:border-[var(--border-glow)] transition-all font-mono text-[10px] font-semibold tracking-wider flex items-center gap-2"
@@ -186,8 +223,11 @@ const IntroAnimation: React.FC<{ onComplete: () => void; onImpact: () => void }>
        {/* PHASE 1: BIOS SCREEN */}
        {phase === 'BIOS' && (
            <div className="flex flex-col items-center justify-center w-full h-full animate-[biosText_2.4s_ease-in-out_forwards]">
-               <div className="text-[var(--accent-amethyst-500)] font-display text-4xl md:text-8xl tracking-[0.1em] drop-shadow-md mb-4 text-center px-4 leading-relaxed font-bold">
-                   INDRA <span className="text-white">AI</span>
+               <div className="text-[var(--accent-amethyst-500)] font-mono text-3xl md:text-6xl tracking-[0.1em] drop-shadow-[0_0_10px_rgba(157,78,221,0.5)] mb-2 text-center px-4 font-bold">
+                   INDRADEV_PORTFOLIO
+               </div>
+               <div className="text-[var(--text-secondary)] font-mono text-xs md:text-base tracking-[0.2em] animate-pulse">
+                   PRESS START. BUILD YOUR SYSTEM.
                </div>
            </div>
        )}
@@ -196,7 +236,7 @@ const IntroAnimation: React.FC<{ onComplete: () => void; onImpact: () => void }>
 };
 
 // MAIN APP STATES
-type AppState = 'SETUP' | 'SYSTEMATIZING' | 'GAMEPLAY' | 'RECAP' | 'VICTORY';
+type AppState = 'PORTFOLIO_VIEW' | 'SETUP' | 'SYSTEMATIZING' | 'GAMEPLAY' | 'RECAP' | 'VICTORY';
 
 const App: React.FC = () => {
   // --- ZUSTAND GLOBAL STATE ---
@@ -214,7 +254,10 @@ const App: React.FC = () => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [initialDossierId, setInitialDossierId] = useState<string | null>(null);
-  const [showManifesto, setShowManifesto] = useState(false); // New state for manifesto toggle
+  const [showManifesto, setShowManifesto] = useState(false);
+  
+  // GLOBAL LANGUAGE STATE
+  const [language, setLanguage] = useState<'EN' | 'PL' | 'BEL'>('EN');
   
   // WebView & Network State
   const [connectionStatus, setConnectionStatus] = useState<'OK' | 'WARNING' | 'BROKEN'>('OK');
@@ -276,7 +319,7 @@ const App: React.FC = () => {
       const portfolioId = params.get('portfolio');
       if (portfolioId) {
           setInitialDossierId(portfolioId);
-          setShowArchive(true);
+          setShowArchive(true); // Still keep this logic for direct linking
           // If deep linked, skip intros
           setShowIntro(false);
           setShowConnectionRequest(false);
@@ -429,7 +472,20 @@ const App: React.FC = () => {
   const handleConnectionAccepted = useCallback(() => {
       setShowConnectionRequest(false);
       setUiVisible(true);
+      // NEW FLOW: Go to Portfolio View first
+      setAppState('PORTFOLIO_VIEW');
   }, []);
+
+  const handlePortfolioContinue = useCallback(() => {
+      setAppState('SETUP');
+  }, []);
+
+  // COPY DICTIONARY FOR MAIN BUTTON
+  const INSERT_MIND_COPY = {
+      EN: "PRESS START",
+      PL: "NACIŚNIJ START",
+      BEL: "ЗАСНУЙ START"
+  };
 
   return (
     <div className="relative h-dvh w-full flex flex-col overflow-hidden bg-[var(--bg-void)] font-body text-[var(--text-primary)]">
@@ -437,9 +493,14 @@ const App: React.FC = () => {
       <WebViewWarner status={connectionStatus} appName={detectedApp} />
 
       {/* HEADER */}
-      <Header onCalendarClick={() => setShowCalendar(true)} isLanding={appState === 'SETUP'} />
+      <Header 
+        onCalendarClick={() => setShowCalendar(true)} 
+        isLanding={appState === 'SETUP'} 
+        language={language}
+        setLanguage={setLanguage}
+      />
 
-      {/* Archive Modal */}
+      {/* Archive Modal (Standard Access) */}
       {showArchive && (
         <SystemArchive 
             onClose={() => {
@@ -460,7 +521,8 @@ const App: React.FC = () => {
           <BossRaidCalendar 
             isAdmin={isAdmin} 
             onClose={() => setShowCalendar(false)} 
-            onStartTechTask={handleStartTechTask} 
+            onStartTechTask={handleStartTechTask}
+            estimation={cartridge.mode === 'TECH_TASK' ? cartridge.techTask?.estimation : undefined}
           />
       )}
 
@@ -488,7 +550,13 @@ const App: React.FC = () => {
       {showIntro && <IntroAnimation onImpact={handleIntroImpact} onComplete={handleIntroComplete} />}
 
       {/* Connection Request Overlay (The "Disclaimer") */}
-      {showConnectionRequest && <ConnectionRequest onProceed={handleConnectionAccepted} />}
+      {showConnectionRequest && (
+          <ConnectionRequest 
+            onProceed={handleConnectionAccepted} 
+            language={language}
+            setLanguage={setLanguage}
+          />
+      )}
 
       {/* MAIN CONTENT CONTAINER */}
       <div className={`flex-1 relative w-full h-full overflow-hidden p-2 md:p-4 transition-all duration-[2000ms] ease-[cubic-bezier(0.16,1,0.3,1)] origin-center ${uiVisible ? 'scale-100 opacity-100' : 'scale-0 opacity-0 blur-3xl'}`}>
@@ -501,6 +569,19 @@ const App: React.FC = () => {
                <div className="absolute bottom-[-2px] right-[-2px] w-8 h-8 md:w-16 md:h-16 border-b-[6px] border-r-[6px] border-[var(--accent-emerald-500)]"></div>
                <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)50%,rgba(0,0,0,0.1)50%)] bg-[length:100%_4px] opacity-20 z-10"></div>
           </div>
+
+          {/* --- STATE: PORTFOLIO SHOWCASE (NEW) --- */}
+          {appState === 'PORTFOLIO_VIEW' && (
+              <div className="relative z-30 w-full h-full animate-in fade-in duration-500">
+                  <SystemArchive 
+                      onClose={() => handlePortfolioContinue()} // Fallback
+                      onOpenCalendar={() => setShowCalendar(true)}
+                      onStartGame={handleInsertMind}
+                      mode="SHOWCASE"
+                      onContinue={handlePortfolioContinue}
+                  />
+              </div>
+          )}
 
           {/* --- STATE: LANDING PAGE (SETUP) --- */}
           {appState === 'SETUP' && (
@@ -569,7 +650,7 @@ const App: React.FC = () => {
                     </div>
                  </div>
 
-                 {/* 3. INSERT MIND BUTTON */}
+                 {/* 3. PRESS START BUTTON */}
                  <div className="w-full max-w-md z-30 shrink-0 mt-2 mb-2">
                      <button 
                         ref={insertMindInputRef}
@@ -577,7 +658,7 @@ const App: React.FC = () => {
                         className="w-full py-4 md:py-5 bg-[var(--accent-amethyst-500)] text-[var(--text-inverse)] font-display font-bold text-3xl md:text-4xl rounded shadow-[0_0_30px_rgba(157,78,221,0.5)] hover:bg-[var(--accent-amethyst-500)]/90 hover:scale-[1.02] transition-all active:scale-95 border border-[var(--border-glow)] tracking-widest relative overflow-hidden group"
                      >
                          <span className="relative z-10 group-hover:text-white transition-colors">
-                             INSERT MIND (FREE TRIAL)
+                             {INSERT_MIND_COPY[language]}
                          </span>
                          <div className="absolute inset-0 bg-white/30 translate-x-[-100%] group-hover:text-white transition-transform duration-500 ease-in-out skew-x-12"></div>
                      </button>
@@ -608,6 +689,7 @@ const App: React.FC = () => {
                           theme={theme === 'dark' ? 'DARK' : 'LIGHT'}
                           onAdminGrant={() => setIsAdmin(true)}
                           onNetworkError={handleNetworkError}
+                          onOpenCalendar={() => setShowCalendar(true)}
                        />
                   </div>
               </div>

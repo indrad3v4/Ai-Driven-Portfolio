@@ -5,9 +5,9 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { InsightCartridge, updateCartridgeProgress } from '../lib/insight-object';
-import { chatWithManagerAgent, systematizeInsight, generateNanoBananaImage } from '../services/gemini';
+import { chatWithManagerAgent, chatWithTechAgent, systematizeInsight, generateNanoBananaImage } from '../services/gemini';
 import { generatePythonAgent, generateReadme, triggerDownload } from '../lib/system-serializer';
-import { loginWithGoogle, logout, saveWorkspace, deductCredit, UserProfile, subscribeToAuth } from '../services/auth-service';
+import { loginWithGoogle, logout, saveWorkspace, deductCredit, UserProfile, subscribeToAuth, generateAccessCode, claimAccessCode } from '../services/auth-service';
 import RetroButton from './RetroButton';
 import { User } from 'firebase/auth';
 import ManifestVisualizer from './ManifestVisualizer';
@@ -18,9 +18,10 @@ interface Props {
     theme: 'DARK' | 'LIGHT';
     onAdminGrant: () => void;
     onNetworkError?: () => void; // New callback for WebView detection
+    onOpenCalendar?: () => void; // New callback to open calendar from Tech Mode
 }
 
-const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminGrant, onNetworkError }) => {
+const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminGrant, onNetworkError, onOpenCalendar }) => {
     const [input, setInput] = useState('');
     const [isThinking, setIsThinking] = useState(false);
     const [isSystematizing, setIsSystematizing] = useState(false);
@@ -38,14 +39,14 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
     // Setup phase only applies in Game Mode
     const isSetupPhase = !isTechMode && (!cartridge.hero.description || !cartridge.villain.description);
     
-    // Economy Logic
-    const isLowCredits = (userProfile?.credits || cartridge.credits) < 1;
+    // Economy Logic (Safe check)
+    const currentCredits = cartridge.credits ?? 0;
+    const isLowCredits = (userProfile?.credits || currentCredits) < 1;
     // const turnCount = cartridge.chatHistory.filter(msg => msg.role === 'user').length; // Removed: Handled in handleSend
     
     // Unlock Logic
     const CABINET_CODE_PREFIX = "/cabinet";
     const CABI_PREFIX = "/cabi";
-    const SECRET_CODE = "TZ_abc123xyz"; // Standard unlock code
     const ADMIN_HASH = "esCDtT#1mwHLn@qHEjne"; // Admin hash
     const NANOBANANA_CMD = "/generate-og";
 
@@ -182,16 +183,29 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                 return;
             }
 
-            // 2. STANDARD UNLOCK
+            // 2. STANDARD UNLOCK (CHECK FIREBASE)
             if (!cartridge.cabinetUnlocked) {
-                const nextState = updateCartridgeProgress(cartridge, {
-                    cabinetUnlocked: true,
-                    credits: cartridge.credits + 15,
-                    chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "🔓 CABINET UNLOCKED! +15 CREDITS." }]
-                });
-                onUpdate(nextState);
-                setInput('');
-                return;
+                setIsThinking(true);
+                const isValid = await claimAccessCode(code, user?.uid);
+                setIsThinking(false);
+
+                if (isValid) {
+                    const nextState = updateCartridgeProgress(cartridge, {
+                        cabinetUnlocked: true,
+                        credits: (cartridge.credits || 0) + 10,
+                        chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "🔓 ACCESS GRANTED. WELCOME TO THE CABINET.\n+10 ENERGY RESTORED." }]
+                    });
+                    onUpdate(nextState);
+                    setInput('');
+                    return;
+                } else {
+                    const nextState = updateCartridgeProgress(cartridge, {
+                        chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "⛔ ACCESS DENIED. INVALID CLEARANCE CODE." }]
+                    });
+                    onUpdate(nextState);
+                    setInput('');
+                    return;
+                }
             } else {
                 const nextState = updateCartridgeProgress(cartridge, {
                     chatHistory: [...cartridge.chatHistory, { role: 'user' as const, content: textToSend }, { role: 'system' as const, content: "ALREADY UNLOCKED." }]
@@ -202,9 +216,54 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
             }
         }
 
-        // CHECK CREDITS (If not system trigger)
-        if (!isSystemTrigger) {
-            if (cartridge.credits < 1) {
+        // --- ECONOMY & LOCKING LOGIC ---
+        const userTurns = cartridge.chatHistory.filter(m => m.role === 'user').length;
+        
+        // Prepare History Mutation (TRIZ Principle #5: Merging)
+        // We build the history logic FIRST to avoid race conditions with onUpdate
+        let nextHistory = [...cartridge.chatHistory];
+
+        // Turn 4 Warning (This is the 5th message attempt, userTurns = 4 existing)
+        // Actually, if we have 4 messages, we are about to add the 5th. 
+        // 5 messages = 5 credits used.
+        // So warning should appear when userTurns === 4 (meaning 4 inputs exist, this is the 5th).
+        if (userTurns === 4 && !isSystemTrigger && !cartridge.cabinetUnlocked) {
+             // Append warning BEFORE the user's new message is processed visually
+             nextHistory.push({
+                 role: 'system' as const,
+                 content: "⚠️ ENERGY CRITICAL. CABINET LOCK IMMINENT. ONE TURN REMAINING."
+             });
+        }
+
+        // Turn 5 Lock & Code Generation (Universal)
+        if (userTurns >= 5 && !isSystemTrigger && !cartridge.cabinetUnlocked) {
+            setIsThinking(true);
+            try {
+                // Generate and store unique code
+                const newCode = await generateAccessCode();
+                
+                // Add the lock message
+                nextHistory.push({
+                    role: 'system' as const,
+                    content: `🔒 **PROTOCOL PAUSED.**\n\nTo secure your architecture and continue, enter your unique clearance code:\n\n**${newCode}**\n\nType \`/cabi ${newCode}\` to enter the Cabinet.`
+                });
+
+                const lockState = updateCartridgeProgress(cartridge, {
+                    chatHistory: nextHistory
+                });
+                onUpdate(lockState);
+                setInput('');
+            } catch(e) {
+                console.error("Lock generation failed", e);
+            } finally {
+                setIsThinking(false);
+            }
+            return; // STOP execution here. Do not send to agent.
+        }
+
+        // CHECK CREDITS (If unlocked, use standard credits. If locked, logic above handles it)
+        if (!isSystemTrigger && cartridge.cabinetUnlocked) {
+            if ((cartridge.credits || 0) < 1) {
                 setShowRechargeModal(true);
                 return;
             }
@@ -214,34 +273,39 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
         setIsThinking(true);
         
         // DEDUCT CREDIT (Optimistic)
-        const newCredits = isSystemTrigger ? cartridge.credits : Math.max(0, cartridge.credits - 1.0);
+        const currentCreditsSafe = cartridge.credits || 0;
+        const newCredits = isSystemTrigger ? currentCreditsSafe : Math.max(0, currentCreditsSafe - 1.0);
         
         // If logged in, deduct from Firestore
         if (user && !isSystemTrigger) {
             deductCredit(user.uid);
         }
 
-        let newHistory = [...cartridge.chatHistory];
+        // Add User Message
         if (!isSystemTrigger) {
-            newHistory.push({ role: 'user' as const, content: textToSend });
+            nextHistory.push({ role: 'user' as const, content: textToSend });
         }
         
-        // 1. Optimistic update
+        // 1. Optimistic update (History + Credits)
         const tempState = updateCartridgeProgress(cartridge, { 
-            chatHistory: newHistory, 
+            chatHistory: nextHistory, 
             credits: newCredits 
         });
         onUpdate(tempState);
 
         try {
-            // 2. Call Gemini (Ambika)
-            const result = await chatWithManagerAgent(isSystemTrigger ? "Initialize Ambika." : textToSend, tempState);
+            // 2. Call Gemini (Ambika OR Tech Architect)
+            let result;
+            
+            if (isTechMode) {
+                // Use the Specialized Technical Architect Agent
+                result = await chatWithTechAgent(isSystemTrigger ? "Initialize Protocol." : textToSend, tempState);
+            } else {
+                // Use Standard Game Manager (Ambika)
+                result = await chatWithManagerAgent(isSystemTrigger ? "Initialize Ambika." : textToSend, tempState);
+            }
             
             // --- VARIANT A: RESPONSE FORMATTER LOGIC ---
-            // The backend sends { response: "...", updates: {...} } often wrapped in markdown.
-            // If the service layer failed to parse it, we get the raw string. We must parse it here
-            // to separate the narrative (for the user) from the logic (for the system).
-            
             let narrativeText = result.text;
             let systemUpdates = result.updatedCartridge;
 
@@ -256,26 +320,16 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                     if (parsed.response) {
                         narrativeText = parsed.response;
                         systemUpdates = { ...systemUpdates, ...parsed.updates };
-                        console.log("⚡ Response Formatter: Extracted narrative & updates");
                     }
                 } catch (e) {
                     console.warn("Response Formatter: Parsing failed, displaying raw text.", e);
                 }
             }
-            // -------------------------------------------
-
-            // 3. Update History with clean narrative
-            const updatedHistory = [...newHistory, { role: 'model' as const, content: narrativeText }];
             
-            // 4. CHECK FOR TURN 5 HINT (Persistent Logic)
-            const userTurns = updatedHistory.filter(m => m.role === 'user').length;
-            if (userTurns === 5 && !cartridge.cabinetUnlocked) {
-                 updatedHistory.push({
-                     role: 'system' as const,
-                     content: "🔒 CABINET FOUND. Enter code to unlock +15 credits.\nHint: Use '/cabi " + SECRET_CODE + "'"
-                 });
-            }
-
+            // 3. Update History with clean narrative
+            // Note: We use nextHistory (which might contain the warning) as the base
+            const updatedHistory = [...nextHistory, { role: 'model' as const, content: narrativeText }];
+            
             // 5. Deep merge the updates
             const nextState = updateCartridgeProgress(tempState, {
                 ...systemUpdates,
@@ -292,7 +346,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
         } catch (e) {
             console.error(e);
             const errorState = updateCartridgeProgress(tempState, {
-                 chatHistory: [...newHistory, { role: 'system' as const, content: "AMBIKA CONNECTION ERROR. PLEASE RETRY." }]
+                 chatHistory: [...nextHistory, { role: 'system' as const, content: "UPLINK ERROR. PLEASE RETRY." }]
             });
             onUpdate(errorState);
         } finally {
@@ -315,15 +369,17 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
 
     // Helper for input placeholder text
     const getPlaceholder = () => {
-        if (cartridge.credits < 1.0) return "RECHARGE REQUIRED";
+        if ((cartridge.credits || 0) < 1.0 && cartridge.cabinetUnlocked) return "RECHARGE REQUIRED";
+        if (!cartridge.cabinetUnlocked && cartridge.chatHistory.filter(m => m.role === 'user').length >= 5) return "ENTER CABINET CODE...";
+        if (isTechMode) return "Describe project or answer agent...";
         if (isNameUndefined) return "Enter your name...";
-        if (isTechMode) return "Describe technical requirements...";
         if (isSetupPhase) return "Describe Hero/Villain...";
         return "Command Ambika...";
     };
 
     // --- MESSAGE RENDERER (Markdown -> HTML) ---
     const renderMessageContent = (text: string) => {
+        if (!text) return null; // Safe guard
         const parts = text.split(/(\*\*.*?\*\*|!\[.*?\]\(.*?\))/g);
         return parts.map((part, index) => {
             if (part.startsWith('**') && part.endsWith('**')) {
@@ -346,6 +402,9 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
             return part;
         });
     };
+
+    // Safe credit display
+    const creditDisplay = typeof currentCredits === 'number' ? currentCredits.toFixed(1) : '0.0';
 
     return (
         <div className="h-full w-full flex flex-col md:flex-row gap-4 relative">
@@ -413,8 +472,8 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                 {/* Header Stats */}
                 <div className="flex justify-between items-center px-1 font-mono text-[10px] text-[var(--text-muted)]">
                     <span className="flex items-center gap-2">
-                        ENERGY: <span className={`font-bold ${cartridge.credits < 5 ? 'text-[var(--accent-ruby-500)] animate-pulse' : 'text-[var(--accent-emerald-500)]'}`}>{cartridge.credits.toFixed(1)}</span>
-                        {user && <span className="text-[var(--accent-sapphire-500)]">[{user.displayName?.split(' ')[0]}]</span>}
+                        ENERGY: <span className={`font-bold ${currentCredits < 5 ? 'text-[var(--accent-ruby-500)] animate-pulse' : 'text-[var(--accent-emerald-500)]'}`}>{creditDisplay}</span>
+                        {(user || cartridge.cabinetUnlocked) && <span className="text-[var(--accent-sapphire-500)]">[{cartridge.userName || user?.displayName?.split(' ')[0] || "ARCHITECT"}]</span>}
                     </span>
                     <span>TENSION: <span className="text-[var(--accent-ruby-500)]">{cartridge.tension}%</span></span>
                 </div>
@@ -423,7 +482,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                 <div className="flex-1 relative border-2 border-[var(--line-soft)] rounded bg-[var(--bg-void)] overflow-hidden">
                     {/* MODE A: TECH TASK VISUALIZER */}
                     {isTechMode ? (
-                        <ManifestVisualizer cartridge={cartridge} />
+                        <ManifestVisualizer cartridge={cartridge} onLockSlot={onOpenCalendar} />
                     ) : (
                         /* MODE B: GAME MODE (Setup & Quadrants) */
                         <>
@@ -502,7 +561,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                 {/* Status Bar */}
                 <div className="h-8 border border-[var(--line-soft)] rounded flex items-center justify-center bg-[var(--bg-surface)]">
                     <span className="font-mono text-[10px] text-[var(--text-secondary)] animate-pulse tracking-widest">
-                        {isSystematizing ? "INDRA: SYSTEMATIZING..." : (isThinking ? "AMBIKA: ANALYZING..." : (isTechMode ? "AMBIKA: ARCHITECTING" : "AMBIKA: LISTENING"))}
+                        {isSystematizing ? "INDRA: SYSTEMATIZING..." : (isThinking ? "AMBIKA: ANALYZING..." : (isTechMode ? "TRINITY: ARCHITECTING" : "AMBIKA: LISTENING"))}
                     </span>
                 </div>
             </div>
@@ -517,7 +576,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                                 ? 'bg-[var(--accent-amethyst-500)]/10 border border-[var(--accent-amethyst-500)]/30 text-[var(--text-primary)]' 
                                 : (msg.role === 'system' ? 'bg-[var(--accent-topaz-500)]/10 border border-[var(--accent-topaz-500)] text-[var(--accent-topaz-500)]' : 'bg-[var(--bg-surface)] border border-[var(--line-soft)] text-[var(--text-secondary)]')
                             }`}>
-                                {msg.role === 'model' && <span className="text-[9px] text-[var(--accent-topaz-500)] block mb-1 tracking-widest uppercase">Ambika</span>}
+                                {msg.role === 'model' && <span className="text-[9px] text-[var(--accent-topaz-500)] block mb-1 tracking-widest uppercase">{isTechMode ? 'Trinity' : 'Ambika'}</span>}
                                 {msg.role === 'system' && <span className="text-[9px] text-[var(--accent-emerald-500)] block mb-1 tracking-widest uppercase">System</span>}
                                 <div className="whitespace-pre-wrap leading-relaxed">{renderMessageContent(msg.content)}</div>
                             </div>
@@ -572,13 +631,13 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onAdminG
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                         placeholder={getPlaceholder()}
-                        disabled={isThinking || cartridge.credits < 1.0}
+                        disabled={isThinking || (cartridge.credits || 0) < 1.0 && cartridge.cabinetUnlocked}
                         className="flex-1 bg-[var(--bg-void)] border border-[var(--line-soft)] rounded px-3 py-2 text-sm font-mono focus:border-[var(--accent-amethyst-500)] focus:outline-none text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                         autoFocus
                     />
                     <button 
                         onClick={() => handleSend()}
-                        disabled={isThinking || !input.trim() || cartridge.credits < 1.0}
+                        disabled={isThinking || !input.trim() || ((cartridge.credits || 0) < 1.0 && cartridge.cabinetUnlocked)}
                         className="px-4 bg-[var(--accent-topaz-500)] text-[var(--text-inverse)] font-bold font-mono text-xs rounded hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                         SEND

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -39,12 +40,29 @@ export interface TechSection {
 }
 
 export interface TechTaskData {
-    projectUrl?: string; // NEW: Store the user's provided link
-    generalInfo: TechSection;
+    userName?: string;
+    projectUrl?: string; // Context Anchor
+    
+    // 1. MISSION BRIEF (General Info)
+    // Content: Background, Audience, Core Problem, Solution Hypothesis, North Star, Timeline
+    missionBrief: TechSection;
+    
+    // 2. TECH STACK (The How)
+    // Content: Frontend, Backend, Database, AI (Models), Orchestration, Vector DB
     techStack: TechSection;
-    structure: TechSection;
+    
+    // 3. USER FLOW (The Structure)
+    // Content: Journey, Prompt Chains, Latency Budgets
+    userFlow: TechSection;
+    
+    // 4. ROLES (Agent Swarm)
+    // Content: Specific Agents, Tools
     roles: TechSection;
+    
+    // 5. ADMIN (God Mode)
+    // Content: Dashboard, Observability, Cost Tracking
     admin: TechSection;
+
     estimation?: {
         hours: number;
         cost: number;
@@ -98,7 +116,7 @@ export interface InsightCartridge {
 
 export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' = 'GAME'): InsightCartridge => ({
     id: crypto.randomUUID(),
-    credits: 20, // ~20 free turns @ 1.0 credits/turn
+    credits: 10, // 10 free turns (Enhanced Starter Pack)
     mode: mode,
     hero: {
         name: 'HERO',
@@ -122,11 +140,12 @@ export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' 
         media: { level: 0, notes: [], status: 'LOCKED' }
     },
     techTask: mode === 'TECH_TASK' ? {
-        generalInfo: { status: 'PENDING', content: '' },
+        missionBrief: { status: 'PENDING', content: '' },
         techStack: { status: 'PENDING', content: '' },
-        structure: { status: 'PENDING', content: '' },
+        userFlow: { status: 'PENDING', content: '' },
         roles: { status: 'PENDING', content: '' },
-        admin: { status: 'PENDING', content: '' }
+        admin: { status: 'PENDING', content: '' },
+        estimation: { hours: 0, cost: 0, locked: false }
     } : undefined,
     triz: mode === 'TRIZ_SOLVER' ? {
         currentStage: 0,
@@ -157,6 +176,48 @@ export const updateCartridgeProgress = (
     cartridge: InsightCartridge, 
     delta: Partial<InsightCartridge>
 ): InsightCartridge => {
+    
+    // Default structure to ensure safety against partial objects
+    const defaultTechTask: TechTaskData = {
+        missionBrief: { status: 'PENDING', content: '' },
+        techStack: { status: 'PENDING', content: '' },
+        userFlow: { status: 'PENDING', content: '' },
+        roles: { status: 'PENDING', content: '' },
+        admin: { status: 'PENDING', content: '' },
+        estimation: { hours: 0, cost: 0, locked: false }
+    };
+
+    // Construct the base task by safely merging defaults. 
+    const existingTask = (cartridge.techTask || {}) as Partial<TechTaskData>;
+    const baseTechTask: TechTaskData = {
+        userName: existingTask.userName,
+        projectUrl: existingTask.projectUrl, 
+        missionBrief: existingTask.missionBrief || defaultTechTask.missionBrief,
+        techStack: existingTask.techStack || defaultTechTask.techStack,
+        userFlow: existingTask.userFlow || defaultTechTask.userFlow,
+        roles: existingTask.roles || defaultTechTask.roles,
+        admin: existingTask.admin || defaultTechTask.admin,
+        estimation: existingTask.estimation || defaultTechTask.estimation
+    };
+
+    const deltaTechTask = (delta.techTask || {}) as Partial<TechTaskData>;
+    
+    // Only construct merged task if one exists or is being added
+    const shouldHaveTask = !!(cartridge.techTask || delta.techTask);
+
+    const mergedTechTask: TechTaskData | undefined = shouldHaveTask ? {
+        ...baseTechTask,
+        ...deltaTechTask,
+        // Deep merge individual sections
+        missionBrief: { ...baseTechTask.missionBrief, ...(deltaTechTask.missionBrief || {}) },
+        techStack: { ...baseTechTask.techStack, ...(deltaTechTask.techStack || {}) },
+        userFlow: { ...baseTechTask.userFlow, ...(deltaTechTask.userFlow || {}) },
+        roles: { ...baseTechTask.roles, ...(deltaTechTask.roles || {}) },
+        admin: { ...baseTechTask.admin, ...(deltaTechTask.admin || {}) },
+        // TRIZ Principle #13: Deep merge estimation to prevent overwrite by partial data
+        estimation: { ...baseTechTask.estimation, ...(deltaTechTask.estimation || {}) }
+    } : undefined;
+
     const updated = {
         ...cartridge,
         ...delta,
@@ -167,7 +228,8 @@ export const updateCartridgeProgress = (
             creative: { ...cartridge.quadrants.creative, ...(delta.quadrants?.creative || {}) },
             producing: { ...cartridge.quadrants.producing, ...(delta.quadrants?.producing || {}) },
             media: { ...cartridge.quadrants.media, ...(delta.quadrants?.media || {}) }
-        }
+        },
+        techTask: mergedTechTask
     };
     return updated;
 };

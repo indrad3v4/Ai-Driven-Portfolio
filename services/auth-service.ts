@@ -6,7 +6,7 @@
 
 import { auth, db, googleProvider } from "../lib/firebase";
 import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, User } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, increment } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, increment, collection, addDoc, query, where, getDocs } from "firebase/firestore";
 import { InsightCartridge } from "../lib/insight-object";
 
 export interface UserProfile {
@@ -80,4 +80,71 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
 
 export const logout = async () => {
     await firebaseSignOut(auth);
+};
+
+// 5. ACCESS CODE SYSTEM (Cabinet Unlock)
+
+/**
+ * Generates a unique "TZ-" code and stores it in Firestore.
+ * Used when a user hits the Turn 5 wall.
+ */
+export const generateAccessCode = async (): Promise<string> => {
+    try {
+        // Generate TZ-XXXX hex code
+        const randomHex = Math.floor(Math.random() * 16777215).toString(16).toUpperCase().padStart(6, '0');
+        const code = `TZ-${randomHex}`;
+        
+        // Store in 'access_codes' collection
+        await setDoc(doc(db, "access_codes", code), {
+            code: code,
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString(),
+            claimedBy: null,
+            claimedAt: null
+        });
+        
+        return code;
+    } catch (e) {
+        console.error("Failed to generate access code", e);
+        // Fallback for offline/demo mode
+        return `TZ-${Math.floor(Math.random() * 900000) + 100000}`; 
+    }
+};
+
+/**
+ * Validates and claims an access code.
+ * Returns true if valid and active.
+ */
+export const claimAccessCode = async (code: string, userId?: string): Promise<boolean> => {
+    try {
+        const codeRef = doc(db, "access_codes", code);
+        const codeSnap = await getDoc(codeRef);
+
+        if (codeSnap.exists()) {
+            const data = codeSnap.data();
+            if (data.status === 'ACTIVE') {
+                // Mark as claimed
+                await updateDoc(codeRef, {
+                    status: 'CLAIMED',
+                    claimedBy: userId || 'anonymous',
+                    claimedAt: new Date().toISOString()
+                });
+                return true;
+            } else if (data.status === 'CLAIMED') {
+                // For MVP, we might allow re-use by same user, but let's be strict for now
+                // Or if it's the same user, allow it. 
+                if (userId && data.claimedBy === userId) return true;
+                return false; 
+            }
+        }
+        
+        // Fallback for hardcoded admin/demo codes
+        if (code === "TZ_abc123xyz" || code === "esCDtT#1mwHLn@qHEjne") return true;
+        
+        return false;
+    } catch (e) {
+        console.error("Failed to verify code", e);
+        // If offline/error, allow specific fallback
+        return code === "TZ_abc123xyz"; 
+    }
 };
