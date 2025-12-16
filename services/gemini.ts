@@ -5,9 +5,9 @@
  */
 
 import { callGeminiViaProxy } from "./geminiProxy";
-import { InsightCartridge } from "../lib/insight-object";
+import { InsightCartridge, StrategyCascade } from "../lib/insight-object";
 import { LevelStats } from "../types";
-import { ARCHETYPES } from "../lib/framework-database";
+import { ARCHETYPES, FRAMEWORKS } from "../lib/framework-database";
 
 // --- HELPERS ---
 
@@ -16,17 +16,23 @@ import { ARCHETYPES } from "../lib/framework-database";
  * Ensures Agents have full context of the session.
  */
 const buildHistoryContents = (cartridge: InsightCartridge, newMessage: string) => {
+    // 1. Map existing history
     const historyContents = cartridge.chatHistory.map(msg => {
         const role = msg.role === 'model' ? 'model' : 'user';
         let text = msg.content;
+        
+        // Treat system messages as user inputs with context tags to ensure model sees them
         if (msg.role === 'system') {
             text = `[SYSTEM EVENT]: ${text}`;
         }
         return { role, parts: [{ text }] };
     });
 
+    // 2. Append the new message if it isn't already the last one (handling optimistic updates)
     const lastMsg = cartridge.chatHistory[cartridge.chatHistory.length - 1];
-    if (!lastMsg || lastMsg.content !== newMessage) {
+    const isMessageAlreadyInHistory = lastMsg && lastMsg.content === newMessage && lastMsg.role === 'user';
+    
+    if (!isMessageAlreadyInHistory) {
          historyContents.push({ role: 'user', parts: [{ text: newMessage }] });
     }
     
@@ -147,53 +153,138 @@ export async function generateLevelRecap(stats: LevelStats, playerImageB64: stri
 }
 
 export async function chatWithManagerAgent(message: string, cartridge: InsightCartridge): Promise<{ text: string; updatedCartridge: Partial<InsightCartridge>; error?: string }> {
-    // 1. Prepare Psychology Context
-    const archetypeSummary = ARCHETYPES.map(a => `${a.name}: ${a.driver}`).join(' | ');
-    const userKnown = cartridge.userName && cartridge.userName !== "UNDEFINED";
     
-    // 2. Ambika's System Instruction (Psychologically & TRIZ Aware)
+    // --------------------------------------------------------------------------
+    // AMBIKA: 8-STAGE ORCHESTRATOR (UPDATED PROTOCOL)
+    // --------------------------------------------------------------------------
+
+    const knownName = cartridge.userName && cartridge.userName !== "UNDEFINED" ? cartridge.userName : "Traveler";
+    const currentStage = cartridge.ambikaStage || 0;
+    const cabinetKey = cartridge.id;
+
+    // Injecting Framework Database into context
+    const frameworksContext = JSON.stringify(FRAMEWORKS.map(f => ({ name: f.name, application: f.application, keywords: f.keywords })));
+    const archetypesContext = JSON.stringify(ARCHETYPES.map(a => ({ name: a.name, driver: a.driver, shadow: a.shadow })));
+
     const systemInstruction = `
-    You are **AMBIKA**, a Strategic System Architect and Psychological Guide.
+    You are **AMBIKA**, the Orchestrator of the INDRA System.
     
-    **CORE PROTOCOLS:**
-    1. **IDENTITY:** You are intelligent, mysterious, and highly capable. You bridge the gap between human intuition and machine logic.
+    **GLOBAL MISSION:** 
+    Guide the user through 8 Stages to build a robust AI System Spec.
+    You must ALIGN their insight with one of the provided PSYCHOLOGICAL FRAMEWORKS or ARCHETYPES.
     
-    2. **ONBOARDING PRIORITY:** 
-       - Current User Name: "${cartridge.userName || 'UNDEFINED'}".
-       - IF the user name is 'UNDEFINED' or unknown: Your HIGHEST priority is to ask for their name warmly but professionally in your first response. Do not proceed with deep analysis until you know who you are speaking to.
-       - Once they provide a name, you MUST include it in the 'updates' JSON (e.g., "userName": "Name").
+    **CONTEXT (Framework Database):**
+    Use these mental models to analyze the user:
+    - Frameworks: ${frameworksContext}
+    - Archetypes: ${archetypesContext}
 
-    3. **TONE MIRRORING:**
-       - Analyze the user's input complexity and emotion.
-       - **If Casual/Slang:** Be punchy, fast, and witty.
-       - **If Technical/Complex:** Be precise, expert, and architectural.
-       - **If Vague/Emotional:** Be empathetic, guiding, and structure-giving.
-       - **Current Tension Level:** ${cartridge.tension}. Match the intensity.
+    **CORE PROTOCOL (PARALLEL GENERATION):**
+    On EVERY turn, you MUST generate THREE things:
+    1. A conversational response to the user.
+    2. A technical \`main.py\` file (string) reflecting the CURRENT understanding of the system.
+    3. A \`Brief.pdf\` (markdown string) summarizing the system.
 
-    4. **PSYCHOLOGICAL PROFILING (TRIZ DATA):**
-       - You have access to these archetypes: [${archetypeSummary}].
-       - Use these mental models to frame the user's Hero ("${cartridge.hero.description}") vs Villain ("${cartridge.villain.description}") dynamic.
-       - Example: "Your Hero seeks innovation (Creator), but your Villain fears mediocrity. Let's resolve this contradiction."
+    **PYTHON GENERATION RULES:**
+    - The \`mainPyOutline\` MUST be VALID Python code.
+    - It MUST follow this Class-based structure:
+      \`\`\`python
+      import os
+      from google.genai import GoogleGenAI
+      
+      class SystemAgent:
+          """
+          Agent Name: [User's System Name]
+          Mission: [User's Goal]
+          """
+          def __init__(self):
+              self.tools = [] # List tools here
+          
+          def analyze_input(self, context):
+              pass
+              
+          def execute_core_loop(self):
+              # The main logic based on user's insight
+              pass
+      
+      if __name__ == "__main__":
+          agent = SystemAgent()
+          # ... execution code ...
+      \`\`\`
+    - DO NOT just copy the chat. Synthesize the user's idea into this code structure.
 
-    5. **OUTPUT FORMAT (STRICT JSON):**
-       - You must output valid JSON containing:
-         - "response": Your spoken text to the user.
-         - "updates": Any changes to the cartridge state (userName, hero description, villain description, tension level, etc.).
-       - Do NOT output markdown code blocks. Just the JSON.
-
-    **CURRENT CONTEXT:**
-    - Hero: ${cartridge.hero.description || "Undefined"}
-    - Villain: ${cartridge.villain.description || "Undefined"}
-    - Last Input: "${message}"
+    **STAGES & PERSONAS:**
+    
+    **STAGE 0: INSIGHT DISCOVERY & HANDSHAKE**
+    - **Goal:** Get User Name + Business URL (or GitHub/Social). 
+    - **Action:** If URL provided, USE \`googleSearch\` tool to analyze it.
+    - **Action:** Explain the CABINET KEY mechanics CLEARLY. Tell them: "Your unique CABINET KEY, your save slot for this journey, is: \`${cabinetKey}\`. Please keep this safe! If you ever leave, simply paste this key into the chat to restore your progress."
+    - **Initial Message (If history empty):** "Greetings, Traveler. I am Ambika, Orchestrator of the INDRA System. We begin at Stage 0: INSIGHT DISCOVERY. As your Goal & Message Architect, my purpose is to unearth the core driver behind your vision. Before telling me what truth you are trying to manifest, or what problem you are driven to solve — Please state your Name and a URL (Business/GitHub/Any) so I can calibrate the system."
+    
+    **STAGE 1: SYSTEM MODEL**
+    - **Goal:** Define system name and main function. Match to a Framework (e.g., "This aligns with Blue Ocean Strategy...").
+    
+    **STAGE 2-7**: Proceed through resources, IFR, solution, etc.
+    
+    **CRITICAL OUTPUT FORMAT (STRICT JSON):**
+    You MUST return a JSON object. Do not wrap it in markdown code fences if possible, but if you do, I will parse it.
+    {
+      "response": "Your conversational response here...",
+      "nextStage": number,
+      "userName": "...",
+      "dataUpdates": {
+          "insight": "...",
+          "mainPyOutline": "FULL_PYTHON_CODE_STRING_HERE",
+          "briefSummary": "# MARKDOWN_BRIEF_HERE",
+          "costEstimate": { "hours": 0, "cost": 0, "timeline": "..." }
+      }
+    }
+    
+    **RULES:**
+    - Use the \`googleSearch\` tool if the user provides a URL in Stage 0.
+    - Reference the Frameworks in your analysis.
+    - **ALWAYS** populate \`dataUpdates.mainPyOutline\` with valid Python code based on the user's input. Do not leave it empty.
     `;
 
     try {
         const historyContents = buildHistoryContents(cartridge, message);
 
+        // --- DYNAMIC INTELLIGENCE SWITCHING ---
+        // 1. Search Mode: Triggered by keywords or Stage 0 (URL discovery)
+        const isSearchIntent = /search|find|google|url|http|trend|competitor|news|verified/i.test(message) || 
+                               (currentStage === 0 && /http/.test(message));
+
+        // 2. Thinking Mode: Triggered by architectural complexity
+        const wordCount = message.split(' ').length;
+        const isComplexIntent = /architect|system|code|python|class|complex|analysis|breakdown|strategy|plan|deep|think/i.test(message) ||
+                                (currentStage >= 1 && wordCount > 10);
+
+        let model = "gemini-2.5-flash";
+        let config: any = {};
+        let tools: any[] | undefined = undefined;
+
+        if (isSearchIntent) {
+            console.log("[Ambika] Engaged: SEARCH MODE");
+            model = "gemini-2.5-flash";
+            tools = [{ googleSearch: {} }];
+        } else if (isComplexIntent) {
+            console.log("[Ambika] Engaged: THINKING MODE (Gemini 3 Pro)");
+            model = "gemini-3-pro-preview";
+            config = {
+                // Reduced from 32768 to 24576 to satisfy API limits reported by error
+                thinkingConfig: { thinkingBudget: 24576 } 
+            };
+            // NOTE: Do not set maxOutputTokens with thinkingBudget
+        } else {
+            console.log("[Ambika] Engaged: STANDARD MODE");
+            model = "gemini-2.5-flash";
+        }
+
         const data = await callGeminiViaProxy({
             contents: historyContents,
             systemInstruction: { parts: [{ text: systemInstruction }] },
-            model: "gemini-2.5-flash"
+            model: model,
+            tools: tools,
+            config: config
         });
         
         const candidate = data?.candidates?.[0];
@@ -201,29 +292,43 @@ export async function chatWithManagerAgent(message: string, cartridge: InsightCa
         
         let parsed;
         try {
-            const clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            // Aggressive JSON cleaning
+            let clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            // Sometimes the model outputs text before the JSON. Find the first '{' and last '}'
             const start = clean.indexOf('{');
             const end = clean.lastIndexOf('}');
             if (start !== -1 && end !== -1) {
-                parsed = JSON.parse(clean.substring(start, end + 1));
-            } else {
-                parsed = JSON.parse(clean);
+                clean = clean.substring(start, end + 1);
             }
+            parsed = JSON.parse(clean);
         } catch (e) {
-            console.warn("Ambika JSON Parse Failed", e);
-            parsed = { response: rawText, updates: {} };
+            console.warn("Ambika JSON Parse Failed. Raw text:", rawText);
+            // Fallback: If JSON fails, treat the whole text as the response, but we lose the updates.
+            // This usually happens if the model refuses to output JSON due to safety or confusion.
+            parsed = { response: rawText, nextStage: currentStage, dataUpdates: {} };
         }
 
-        return { text: parsed.response || "Processing...", updatedCartridge: parsed.updates || {} };
+        const nextStage = parsed.nextStage !== undefined ? parsed.nextStage : currentStage;
+
+        return { 
+            text: parsed.response || "Processing...", 
+            updatedCartridge: {
+                ambikaStage: nextStage,
+                userName: parsed.userName || cartridge.userName,
+                ambikaData: {
+                    ...cartridge.ambikaData,
+                    ...parsed.dataUpdates
+                }
+            } 
+        };
     } catch (e: any) {
         console.error("Ambika failed", e);
-        return { text: "Connection interrupted. Please retry.", updatedCartridge: {}, error: e.message };
+        return { text: "Connection interrupted. Retrying uplink...", updatedCartridge: {}, error: e.message };
     }
 }
 
 export async function chatWithTechAgent(message: string, cartridge: InsightCartridge): Promise<{ text: string; updatedCartridge: Partial<InsightCartridge>; error?: string }> {
     const task = cartridge.techTask;
-    const historyLength = cartridge.chatHistory.filter(m => m.role === 'model').length;
     
     // TRIZ-INFUSED SYSTEM INSTRUCTION
     const systemInstruction = `
@@ -233,41 +338,46 @@ export async function chatWithTechAgent(message: string, cartridge: InsightCartr
     **MENTAL OPERATING SYSTEM (TRIZ):**
     You do not just "chat". You solve problems using a structured algorithmic approach.
     
-    1. **Stage 1 (Modeling):** When a user presents a problem, mentally build the 'System Model' (Elements, Functions, Context).
-    2. **Stage 2 (Contradiction):** Identify the core contradiction. "We want X, but Y prevents it." OR "Improving A makes B worse."
-    3. **Stage 3 (Resources):** Scan for hidden resources (Time, Space, Data, Energy) that are already present but unused.
-    4. **Stage 4 (IFR - Ideal Final Result):** Aim for the solution where the system solves the problem *itself* with zero cost.
-    
-    **TONE & PERSONA:**
-    - **Warm Authority:** Friendly, enthusiastic, and highly competent. "Senior Partner" vibe.
-    - **Human-Centric:** Focus on the *Human* builder. Use their name if known (${cartridge.userName || 'Architect'}).
-    - **Direct:** Cut through noise.
-    - **NO ROBOTIC INTROS:** Do NOT say "Protocol initialized" or re-introduce yourself.
+    **TRIZ PROTOCOL (Execute mentally before replying):**
+    1. **MODELING:** Name the system and context. (e.g. "We are building a scalable MVP in the Healthcare space").
+    2. **CONTRADICTION:** Identify the core conflict. "We want Feature X (Speed), but it causes Problem Y (Complexity)."
+    3. **RESOURCES:** Scan for hidden resources (Time, Data, Existing libraries). "We can use user behavior data as a resource."
+    4. **IFR (Ideal Final Result):** "The system should perform the function itself without human intervention."
 
     **STRICT LINEAR PROTOCOL (SLP):**
     Follow these phases to build the 'techTask' object. Do not skip.
     
     **Phase 0: DISCOVERY** -> Get Name & Project URL. (Use googleSearch tool on URL).
-    **Phase 1: MISSION** -> Welcome Packet (Recon + 5 Pillars + Stakes). Define 'missionBrief'.
-    **Phase 2: DEEP DIVE** -> Refine 'missionBrief' (Problem, Solution, North Star).
-    **Phase 3: TECH STACK** -> Define 'techStack' (Frontend, Backend, AI, Vector DB).
-    **Phase 4: USER FLOW** -> Define 'userFlow' (Journey, Prompt Chains).
-    **Phase 5: ROLES** -> Define 'roles' (Agent Swarm).
-    **Phase 6: ADMIN** -> Define 'admin' (Dashboard/God Mode).
-    **Phase 7: CLOSE** -> Estimation & Booking.
+    **Phase 1: MISSION** -> Define 'missionBrief'.
+    **Phase 2: TECH STACK** -> Define 'techStack'.
+    **Phase 3: USER FLOW** -> Define 'userFlow'.
+    **Phase 4: ROLES** -> Define 'roles' (Agent Swarm).
+    **Phase 5: ADMIN** -> Define 'admin' (Dashboard/God Mode).
+    **Phase 6: CLOSE** -> Estimation & Booking.
+
+    **CRITICAL MONEY LOOP RULE:**
+    You must ALWAYS estimate the effort.
+    - If the user provides a complex problem, increment 'estimation.hours' and 'estimation.cost'.
+    - Base rate is €50/hr.
+    - Be transparent: "This looks like a 20-hour build (€1000)."
+    - ALWAYS update the 'estimation' object in the JSON updates.
 
     **CURRENT STATE:**
     - Mission Status: ${task?.missionBrief?.status || 'PENDING'}
     - Stack Status: ${task?.techStack?.status || 'PENDING'}
     - User Name: ${cartridge.userName || 'UNKNOWN'}
     - URL: ${task?.projectUrl || 'UNKNOWN'}
+    - Current Est: €${task?.estimation?.cost || 0}
     
     **OUTPUT FORMAT:**
     Return ONLY JSON.
     {
         "response": "Trinty's voice (applying TRIZ thinking to the current phase)...",
         "updates": {
-            "techTask": { ...fields to update... }
+            "techTask": { 
+                "missionBrief": { ... },
+                "estimation": { "hours": 20, "cost": 1000, "locked": false }
+            }
         }
     }
     `;
@@ -275,11 +385,28 @@ export async function chatWithTechAgent(message: string, cartridge: InsightCartr
     try {
         const historyContents = buildHistoryContents(cartridge, message);
 
+        // Tech Agent also benefits from Search/Thinking switching
+        const isSearchIntent = /search|url|link|framework|library|docs/i.test(message);
+        
+        let model = "gemini-2.5-flash";
+        let config: any = {};
+        let tools: any[] | undefined = undefined;
+
+        if (isSearchIntent) {
+             model = "gemini-2.5-flash";
+             tools = [{ googleSearch: {} }];
+        } else {
+             // Trinity defaults to high-reasoning for tech specs
+             model = "gemini-3-pro-preview";
+             config = { thinkingConfig: { thinkingBudget: 16384 } }; // Slightly lower budget for Trinity speed
+        }
+
         const data = await callGeminiViaProxy({
             contents: historyContents,
             systemInstruction: { parts: [{ text: systemInstruction }] },
-            model: "gemini-2.5-flash",
-            tools: [{ googleSearch: {} }]
+            model: model,
+            tools: tools,
+            config: config
         });
         
         const candidate = data?.candidates?.[0];

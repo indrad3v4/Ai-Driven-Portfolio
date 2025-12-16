@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -33,8 +34,6 @@ function parseGeminiResponse(text: string): any {
   }
 }
 
-
-
 export async function callGeminiViaProxy(request: ProxyRequest, modelOverride?: string): Promise<any> {
   try {
     const targetModel = modelOverride || request.model || 'gemini-2.5-flash';
@@ -44,6 +43,13 @@ export async function callGeminiViaProxy(request: ProxyRequest, modelOverride?: 
     if (payload.prompt !== undefined && !payload.contents) {
         payload.contents = [{ parts: [{ text: payload.prompt || "" }] }];
         delete payload.prompt;
+    }
+    
+    // 🔥 FIX: Map SDK 'config' to REST API 'generationConfig'
+    // The Gemini REST API rejects 'config' as an unknown field.
+    if (payload.config) {
+        payload.generationConfig = payload.config;
+        delete payload.config;
     }
 
     const response = await fetch(PROXY_URL, {
@@ -56,7 +62,7 @@ export async function callGeminiViaProxy(request: ProxyRequest, modelOverride?: 
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Proxy Error: ${response.status}`);
+      throw new Error(`Proxy Error: ${response.status} ${text}`);
     }
 
     const responseText = await response.text();

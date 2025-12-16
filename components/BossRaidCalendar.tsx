@@ -16,26 +16,22 @@ interface CalendarSlot {
     bossName?: string; // If booked
 }
 
-// --- MOCK DATA ---
-const INITIAL_SLOTS: CalendarSlot[] = [
-    { id: '1', day: new Date().getDate(), month: new Date().getMonth(), year: new Date().getFullYear(), time: '14:00 CET', status: 'BOOKED', bossName: 'Entropy' },
-    { id: '2', day: new Date().getDate(), month: new Date().getMonth(), year: new Date().getFullYear(), time: '16:00 CET', status: 'AVAILABLE' },
-    { id: '3', day: new Date().getDate() + 1, month: new Date().getMonth(), year: new Date().getFullYear(), time: '10:00 CET', status: 'AVAILABLE' },
-    { id: '4', day: new Date().getDate() + 1, month: new Date().getMonth(), year: new Date().getFullYear(), time: '18:00 CET', status: 'RAIDING', bossName: 'Procrastination' },
-];
-
 interface Props {
     onClose: () => void;
     isAdmin: boolean;
     onStartTechTask: () => void;
     estimation?: { hours: number; cost: number; locked: boolean };
+    taskSummary?: string; // The "Mission Brief" content from Tech Task
 }
 
-const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, estimation }) => {
+const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, estimation, taskSummary }) => {
     // State
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDay, setSelectedDay] = useState<number | null>(new Date().getDate());
-    const [slots, setSlots] = useState<CalendarSlot[]>(INITIAL_SLOTS);
+    
+    // We only store *changed* slots (Booked by User/Blocked by Admin). 
+    // Default slots and fake bookings are generated on the fly.
+    const [customSlots, setCustomSlots] = useState<CalendarSlot[]>([]);
     const [bookingSlot, setBookingSlot] = useState<CalendarSlot | null>(null);
 
     // Helpers
@@ -56,49 +52,132 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
     const currentDayStr = today.getDate();
     const currentYearStr = today.getFullYear();
 
-    // Filter slots for selected day
-    const daySlots = slots.filter(s => s.day === selectedDay && s.month === month && s.year === year);
+    // GENERATE SLOTS LOGIC
+    // 13:00 to 20:00 (13, 14, 15, 16, 17, 18, 19, 20) = 8 slots
+    const getSlotsForDay = (d: number) => {
+        const generatedHours = Array.from({length: 8}, (_, i) => i + 13); // [13, 14, ..., 20]
+        
+        return generatedHours.map(h => {
+            const timeStr = `${h}:00 CET`;
+            const id = `${year}-${month}-${d}-${h}`;
+            
+            // 1. Check overrides (User booked this session specifically)
+            const custom = customSlots.find(s => s.id === id);
+            if (custom) return custom;
+
+            const slotDate = new Date(year, month, d, h);
+            const now = new Date();
+
+            // 2. Check Past (Disable slots before now)
+            if (slotDate < now) {
+                return {
+                    id,
+                    day: d,
+                    month,
+                    year,
+                    time: timeStr,
+                    status: 'BLOCKED' as const
+                };
+            }
+
+            // 3. Fake Bookings (Deterministic Randomness)
+            // We use sin() based on the date to ensure the "randomness" is stable across re-renders
+            // but looks distributed.
+            const seed = year * 10000 + month * 100 + d * 10 + h;
+            const pseudoRandom = Math.abs(Math.sin(seed));
+            
+            // 40% chance to be booked
+            if (pseudoRandom < 0.4) {
+                return {
+                    id,
+                    day: d,
+                    month,
+                    year,
+                    time: timeStr,
+                    status: 'BOOKED' as const,
+                    bossName: 'CLIENT_SECURE'
+                };
+            }
+
+            // 4. Default Available
+            return {
+                id,
+                day: d,
+                month,
+                year,
+                time: timeStr,
+                status: 'AVAILABLE' as const
+            };
+        });
+    };
+
+    const daySlots = selectedDay ? getSlotsForDay(selectedDay) : [];
     
     // Check status of a day for grid coloring
     const getDayStatus = (d: number) => {
-        const s = slots.filter(slot => slot.day === d && slot.month === month && slot.year === year);
-        if (s.length === 0) return 'EMPTY';
-        if (s.some(slot => slot.status === 'AVAILABLE')) return 'OPEN';
-        if (s.some(slot => slot.status === 'RAIDING')) return 'ACTIVE';
-        return 'FULL';
+        // Just checking if any slot is booked in our custom state or fake state
+        // For performance, we just check simple date bounds for styling
+        const checkDate = new Date(year, month, d);
+        const now = new Date();
+        now.setHours(0,0,0,0);
+
+        if (checkDate < now) return 'PAST';
+        if (checkDate.getTime() === now.getTime()) return 'TODAY';
+        
+        // Since we have fake bookings, essentially every future day has activity
+        return 'OPEN'; 
     };
 
     // --- ACTIONS ---
     const handlePrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
     const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
-    const handleAdminToggleSlot = (id: string) => {
-        setSlots(prev => prev.map(s => {
-            if (s.id !== id) return s;
-            const nextStatus = s.status === 'AVAILABLE' ? 'BLOCKED' : 'AVAILABLE';
-            return { ...s, status: nextStatus };
-        }));
+    const handleAdminToggleSlot = (slot: CalendarSlot) => {
+        const nextStatus: CalendarSlot['status'] = slot.status === 'AVAILABLE' ? 'BLOCKED' : 'AVAILABLE';
+        const newSlot: CalendarSlot = { ...slot, status: nextStatus };
+        
+        // Update custom slots: remove old if exists, add new
+        setCustomSlots(prev => [
+            ...prev.filter(s => s.id !== slot.id),
+            newSlot
+        ]);
     };
 
-    const handleAdminAddSlot = () => {
-        if (!selectedDay) return;
-        const newSlot: CalendarSlot = {
-            id: Math.random().toString(),
-            day: selectedDay,
-            month: month,
-            year: year,
-            time: '12:00 CET', // Default
-            status: 'AVAILABLE'
-        };
-        setSlots([...slots, newSlot]);
-    };
-
+    /**
+     * TRANSMISSION PROTOCOL (Money Stream)
+     */
     const handleConfirmBooking = () => {
         if (!bookingSlot) return;
-        setSlots(prev => prev.map(s => {
-            if (s.id === bookingSlot.id) return { ...s, status: 'BOOKED', bossName: 'New Client' };
-            return s;
-        }));
+
+        // Construct the Payload
+        const subject = `BOSS RAID REQUEST: [INSERT PROJECT NAME] - ${bookingSlot.time}`;
+        
+        let body = `SYSTEM UPLINK INITIATED.\n\n`;
+        body += `REQUESTED SLOT: ${bookingSlot.day}/${bookingSlot.month + 1}/${bookingSlot.year} @ ${bookingSlot.time}\n`;
+        
+        if (estimation && estimation.cost > 0) {
+            body += `PRE-CALCULATED BUDGET: €${estimation.cost} (${estimation.hours} Hours)\n`;
+        } else {
+            body += `BUDGET: To Be Discussed\n`;
+        }
+
+        body += `\n--- MISSION BRIEF ---\n`;
+        body += taskSummary ? taskSummary : "No brief generated. Proceeding to manual intake.";
+        
+        body += `\n\n--- CONTACT INFO ---\n`;
+        body += `Please reply with a Google Meet link to lock this slot.`;
+
+        // Open Mail Client
+        const mailtoLink = `mailto:contact@indra-ai.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.open(mailtoLink, '_blank');
+
+        // Optimistically book locally for UX
+        const bookedSlot: CalendarSlot = { ...bookingSlot, status: 'BOOKED', bossName: 'You (Pending)' };
+        setCustomSlots(prev => [
+            ...prev.filter(s => s.id !== bookingSlot.id),
+            bookedSlot
+        ]);
+        
         setBookingSlot(null);
     };
 
@@ -108,11 +187,11 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
 
     return (
         <div className="fixed inset-0 z-[100] bg-[var(--bg-void)]/95 backdrop-blur-xl flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300">
-            {/* PAYMENT MODAL */}
+            {/* PAYMENT MODAL (NOW TRANSMISSION MODAL) */}
             {bookingSlot && (
                 <div className="fixed inset-0 z-[110] bg-black/80 flex items-center justify-center p-4">
                     <div className="bg-[var(--bg-canvas)] border border-[var(--accent-emerald-500)] p-6 max-w-sm w-full rounded shadow-[0_0_50px_rgba(16,185,129,0.3)] animate-in zoom-in-95">
-                        <h3 className="font-display text-2xl text-[var(--accent-emerald-500)] mb-4">SECURE UPLINK</h3>
+                        <h3 className="font-display text-2xl text-[var(--accent-emerald-500)] mb-4">CONFIRM TRANSMISSION</h3>
                         <div className="space-y-4 font-mono text-xs">
                              <div className="flex justify-between border-b border-[var(--line-soft)] pb-2">
                                  <span className="text-[var(--text-secondary)]">SLOT TIME:</span>
@@ -128,26 +207,25 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                              )}
 
                              <div className="flex justify-between items-center text-[var(--accent-topaz-500)] font-bold text-sm bg-[var(--bg-surface)] p-2 rounded">
-                                 <span>SESSION FEE:</span>
+                                 <span>DEPOSIT:</span>
                                  <span>€{sessionCost.toFixed(2)}</span>
                              </div>
                              
                              <div className="text-[var(--text-muted)] text-[10px] italic leading-tight">
-                                 Payment locks this 1h session with Indradev.
-                                 {projectEstimate > 0 && " Project deposits are handled after we agree on scope."}
+                                 Clicking below opens your secure email client with the mission brief attached.
                              </div>
                              
                              <button 
                                 onClick={handleConfirmBooking}
                                 className="w-full py-4 bg-[var(--accent-emerald-500)] text-[var(--bg-void)] font-display font-bold text-lg rounded hover:brightness-110 transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] animate-pulse"
                              >
-                                 PAY €{sessionCost.toFixed(2)} & LOCK
+                                 TRANSMIT PAYLOAD & REQUEST
                              </button>
                              <button 
                                 onClick={() => setBookingSlot(null)}
                                 className="w-full py-2 text-[var(--text-muted)] hover:text-white transition-colors"
                              >
-                                 CANCEL
+                                 ABORT
                              </button>
                         </div>
                     </div>
@@ -282,15 +360,16 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                 let bgClass = 'bg-[var(--bg-surface)] border-[var(--line-soft)]';
                                 let textClass = 'text-[var(--text-secondary)]';
                                 
-                                if (status === 'OPEN') {
-                                    bgClass = 'bg-[var(--accent-emerald-500)]/10 border-[var(--accent-emerald-500)]/50 hover:bg-[var(--accent-emerald-500)]/20';
-                                    textClass = 'text-[var(--accent-emerald-500)]';
-                                } else if (status === 'FULL') {
-                                    bgClass = 'bg-[var(--accent-ruby-500)]/5 border-[var(--accent-ruby-500)]/30';
+                                if (status === 'PAST') {
+                                    bgClass = 'bg-[var(--bg-void)] border-[var(--line-soft)] opacity-30 cursor-not-allowed';
                                     textClass = 'text-[var(--text-muted)]';
-                                } else if (status === 'ACTIVE') {
+                                } else if (status === 'TODAY') {
                                     bgClass = 'bg-[var(--accent-amethyst-500)]/20 border-[var(--accent-amethyst-500)] animate-pulse';
                                     textClass = 'text-[var(--accent-amethyst-500)]';
+                                } else {
+                                    // Future / Open
+                                    bgClass = 'bg-[var(--accent-emerald-500)]/10 border-[var(--accent-emerald-500)]/50 hover:bg-[var(--accent-emerald-500)]/20';
+                                    textClass = 'text-[var(--accent-emerald-500)]';
                                 }
 
                                 if (isSelected) {
@@ -301,11 +380,12 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                 return (
                                     <button
                                         key={d}
-                                        onClick={() => setSelectedDay(d)}
+                                        onClick={() => status !== 'PAST' && setSelectedDay(d)}
+                                        disabled={status === 'PAST'}
                                         className={`aspect-square rounded border flex flex-col items-center justify-center transition-all relative group ${bgClass}`}
                                     >
                                         <span className={`font-mono text-sm ${textClass}`}>{d}</span>
-                                        {status === 'OPEN' && !isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald-500)] mt-1"></div>}
+                                        {status !== 'PAST' && !isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-emerald-500)] mt-1"></div>}
                                     </button>
                                 );
                             })}
@@ -321,29 +401,28 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                         <div className="flex-1 space-y-3 overflow-y-auto">
                             {daySlots.length === 0 ? (
                                 <div className="text-center py-8 text-[var(--text-muted)] font-mono text-xs">
-                                    NO RAIDS SCHEDULED.
-                                    {isAdmin && <div className="mt-2 text-[var(--accent-emerald-500)]">Admin: Add a slot</div>}
+                                    NO SLOTS AVAILABLE.
                                 </div>
                             ) : (
                                 daySlots.map(slot => (
-                                    <div key={slot.id} className={`p-3 rounded border flex justify-between items-center ${
+                                    <div key={slot.id} className={`p-3 rounded border flex justify-between items-center transition-colors ${
                                         slot.status === 'AVAILABLE' 
                                             ? 'bg-[var(--bg-canvas)] border-[var(--accent-emerald-500)] text-[var(--accent-emerald-500)]' 
-                                            : (slot.status === 'BLOCKED' ? 'bg-[var(--bg-void)] border-[var(--line-soft)] opacity-50' : 'bg-[var(--bg-void)] border-[var(--accent-ruby-500)]')
+                                            : (slot.status === 'BLOCKED' ? 'bg-[var(--bg-void)] border-[var(--line-soft)] opacity-40 text-[var(--text-muted)]' : 'bg-[var(--bg-void)] border-[var(--accent-ruby-500)] opacity-80')
                                     }`}>
                                         <div>
                                             <div className="font-bold font-display text-lg tracking-wider">{slot.time}</div>
                                             <div className="text-[10px] font-mono">
                                                 {slot.status === 'AVAILABLE' && "OPEN SLOT"}
-                                                {slot.status === 'BOOKED' && <span className="text-[var(--text-primary)]">VS. {slot.bossName}</span>}
-                                                {slot.status === 'BLOCKED' && "BLOCKED"}
+                                                {slot.status === 'BOOKED' && <span className="text-[var(--text-primary)]">BUSY // CLIENT WORK</span>}
+                                                {slot.status === 'BLOCKED' && "EXPIRED / BLOCKED"}
                                             </div>
                                         </div>
                                         
                                         {/* Actions */}
                                         {isAdmin ? (
                                             <button 
-                                                onClick={() => handleAdminToggleSlot(slot.id)}
+                                                onClick={() => handleAdminToggleSlot(slot)}
                                                 className="px-2 py-1 text-[9px] bg-[var(--bg-surface)] border border-[var(--line-soft)] hover:border-white transition-colors"
                                             >
                                                 {slot.status === 'AVAILABLE' ? 'BLOCK' : 'OPEN'}
@@ -358,19 +437,13 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                                 </button>
                                             )
                                         )}
+                                        {slot.status === 'BOOKED' && !isAdmin && (
+                                            <div className="text-xl">🔒</div>
+                                        )}
                                     </div>
                                 ))
                             )}
                         </div>
-
-                        {isAdmin && selectedDay && (
-                            <button 
-                                onClick={handleAdminAddSlot}
-                                className="mt-4 w-full py-2 border border-dashed border-[var(--text-muted)] text-[var(--text-muted)] hover:border-[var(--accent-emerald-500)] hover:text-[var(--accent-emerald-500)] text-xs font-mono transition-colors"
-                            >
-                                + ADD SLOT (ADMIN)
-                            </button>
-                        )}
                     </div>
                 </div>
 

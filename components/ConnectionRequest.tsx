@@ -17,38 +17,41 @@ type Language = 'EN' | 'PL' | 'BEL';
 const COPY = {
   EN: {
     headline: "DISCLAIMER",
-    intro: "Hi, I'm **indradev_** — a Python AI Engineer with 5+ years of experience, based in Kraków. This is my interactive portfolio. Welcome to the experience.\n\n**Here's what you can do:**",
-    bullets: [
-      { label: "1. ENTER PORTFOLIO", text: "Explore my collection of live AI/ML/DL systems and agents. Maybe your next project will be built here with me." },
-      { label: "2. PRESS START", text: "Play an AI-powered brainstorming game — like an MMORPG raid where you refine your vision with a swarm of agents. Find inspiration or see your goals from a fresh perspective." },
-      { label: "3. TECHNICAL MANIFESTO", text: "Have an existing system or task? Click \"Fill Technical Task\" in the header. My AI agent will help you draft a technical specification. We'll discuss it together at a scheduled time, and I'll code it for you." },
-      { label: "4. ARCHIVE", text: "Scroll down to explore my manifesto and a growing collection of live AI/ML/DL systems and agents." }
+    intro: "Hi, I'm **indradev_** — a Python AI Engineer based in Kraków. With 5 years of experience in Python, I'm ready to build your system.",
+    subtitle: "In my portfolio you can:",
+    actions: [
+      { id: "1", title: "CHECK", desc: "Live AI systems & case studies." },
+      { id: "2", title: "BUILD YOUR SYSTEM", desc: "In AI-powered RPG. Architect your system in 8 steps." },
+      { id: "3", title: "FILL TECH SPECS", desc: "Skip the game. Draft a tech task with AI & lock a sprint." },
+      { id: "4", title: "CONNECT", desc: "Read the manifesto or ping me directly." }
     ],
-    outro: "If you have questions or want to meet in Kraków for tea, ping me on any frequency below.",
+    outro: "Questions? Tea in Kraków? Ping me on any frequency.",
     cta: "ENTER PORTFOLIO"
   },
   PL: {
     headline: "DISCLAIMER",
-    intro: "Cześć, jestem **indradev_** — inżynier Python AI z ponad 5 latami doświadczenia, pracuję z Krakowa. To jest moje interaktywne portfolio. Witaj w doświadczeniu.\n\n**Oto, co możesz zrobić:**",
-    bullets: [
-      { label: "1. WEJDŹ DO PORTFOLIO", text: "Poznaj moją kolekcję żywych systemów AI/ML/DL i agentów. Może Twój następny projekt powstanie tutaj razem ze mną." },
-      { label: "2. NACIŚNIJ START", text: "Zagraj w grę brainstormingową napędzaną sztuczną inteligencją — jak rajd MMORPG, gdzie ulepszasz swoją wizję za pomocą roju agentów. Znajdź inspirację lub spójrz na swoje cele z nowej perspektywy." },
-      { label: "3. MANIFEST TECHNICZNY", text: "Masz istniejący system lub zadanie? Kliknij \"Wypełnij Zadanie Techniczne\" w nagłówku. Mój agent AI pomoże Ci sporządzić specyfikację techniczną. Omowimy ją razem w wybranym czasie, a ja napiszę kod dla Ciebie." },
-      { label: "4. ARCHIWUM", text: "Przewiń w dół, aby zapoznać się z moim manifestem i rosnącą kolekcją żywych systemów AI/ML/DL oraz agentów." }
+    intro: "Cześć, tu **indradev_** — inżynier AI z Krakowa. Mam 5 lat doświadczenia w Pythonie i jestem gotów zbudować Twój system.",
+    subtitle: "W moim portfolio możesz:",
+    actions: [
+      { id: "1", title: "SPRAWDZIĆ", desc: "Działające systemy AI i case studies." },
+      { id: "2", title: "ZBUDOWAĆ SYSTEM", desc: "W RPG napędzanym AI. Zaprojektuj architekturę w 8 krokach." },
+      { id: "3", title: "WYPEŁNIĆ SPECYFIKACJĘ", desc: "Pomiń grę. Stwórz draft techniczny z AI i zablokuj sprint." },
+      { id: "4", title: "POŁĄCZYĆ SIĘ", desc: "Przeczytaj manifest lub napisz bezpośrednio." }
     ],
-    outro: "Jeśli masz pytania lub chcesz wyskoczyć na herbatę w Krakowie – napisz do mnie na dowolnym kanale poniżej.",
+    outro: "Pytania? Herbata w Krakowie? Pisz śmiało.",
     cta: "WEJDŹ DO PORTFOLIO"
   },
   BEL: {
     headline: "DISCLAIMER",
-    intro: "Прывітанне, я **indradev_** — інженер Python AI з больш як 5 гадамі досведу, базіруюся ў Кракаве. Гэта маё інтэрактыўнае портфоліа. Вітаю!\n\n**Вось што ты можаш зрабіць:**",
-    bullets: [
-      { label: "1. УВАХОД Ў ПОРТФОЛІА", text: "Даследуй мою калекцыю жывых сістэм AI/ML/DL і агентаў. Можа, твой наступны праект будзе створаны тут разам са мной." },
-      { label: "2. НАПІШ START", text: "Гуляй у гульню мозгавога штурму на базе штучнага інтэлекту — як рэйд у MMORPG, дзе ты раздьмухваеш сваю візію з дапамогай роя агентаў. Знайдзі натхненне ці паглядзі на свае мэты ў новым свеце." },
-      { label: "3. ТЭХНІЧНЫ МАНІФЕСТ", text: "У цябе ёсць наяўная сістэма ці задача? Клікні \"Запоўніць Тэхнічнае Заданне\" ў хэдаре. Мой агент AI дапаможа табе скласці тэхнічную спецыфікацыю. А пасля мы абмяркуем яе разам ва выбраны час, і я напішу код для цябе." },
-      { label: "4. АРХІЎ", text: "Скроль вніз, каб даследаваць мой маніфест і растучую кольекцыю жывых сістэм AI/ML/DL і агентаў." }
+    intro: "Прывітанне, я **indradev_** — інжынер AI з Кракава. 5 гадоў у Python, гатовы пабудаваць тваю сістэму.",
+    subtitle: "У маім партфоліа ты можаш:",
+    actions: [
+      { id: "1", title: "ПРАВЕРЫЦЬ", desc: "Жывыя AI-сістэмы і кейсы." },
+      { id: "2", title: "ПАБУДАВАЦЬ СІСТЭМУ", desc: "У AI-RPG. Архітэктура ў 8 крокаў." },
+      { id: "3", title: "ЗАПОЎНІЦЬ СПЕЦ", desc: "Прапусці гульню. Чарнавік з AI і бронь спрынту." },
+      { id: "4", title: "КАНТАКТ", desc: "Чытай маніфест ці пішы напрамую." }
     ],
-    outro: "Калі ў цябе ёсць пытанні ці жадаеш сустрэцца на каву ў Кракаве — напішы мне ў адным з месенджараў ніжэй.",
+    outro: "Пытанні? Кава ў Кракаве? Пішы ў любы мэсэнджар.",
     cta: "УВАЙСЦІ Ў ПОРТФОЛІА"
   }
 };
@@ -80,21 +83,18 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed, language, setLanguage }
 
   const currentCopy = COPY[language];
 
-  // Helper to render markdown-like bolding and newlines
+  // Helper to render markdown-like bolding
   const renderText = (text: string) => {
-    // Split by newlines first to handle paragraphs
-    return text.split('\n').map((line, lineIdx) => {
-      const parts = line.split(/(\*\*.*?\*\*)/g);
-      return (
-        <span key={lineIdx} className="block min-h-[1em]">
-          {parts.map((part, i) => 
-            part.startsWith('**') 
-              ? <strong key={i} className="text-[var(--accent-amethyst-500)] font-normal">{part.slice(2, -2)}</strong> 
-              : part
-          )}
-        </span>
-      );
-    });
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return (
+      <span>
+        {parts.map((part, i) => 
+          part.startsWith('**') 
+            ? <strong key={i} className="text-[var(--accent-amethyst-500)] font-bold">{part.slice(2, -2)}</strong> 
+            : part
+        )}
+      </span>
+    );
   };
 
   const LangButton = ({ code, icon, isActive, onClick }: { code: string, icon: React.ReactNode, isActive: boolean, onClick: () => void }) => (
@@ -112,24 +112,20 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed, language, setLanguage }
   );
 
   return (
-    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--bg-void)] p-4">
-      {/* Background Matrix/Grid Effect */}
-      <div className="absolute inset-0 pointer-events-none opacity-20" 
-           style={{ backgroundImage: 'linear-gradient(rgba(157, 78, 221, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(157, 78, 221, 0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
-      </div>
-
-      <div className={`relative max-w-2xl w-full bg-[var(--bg-surface)]/80 backdrop-blur-xl border border-[var(--accent-amethyst-500)] shadow-[0_0_50px_rgba(157,78,221,0.2)] rounded-[var(--radius-lg)] overflow-hidden transition-all duration-700 transform ${isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-10'}`}>
+    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--bg-void)]/90 backdrop-blur-sm p-4">
+      
+      <div className={`relative max-w-2xl w-full bg-[var(--bg-surface)] border-2 border-[var(--accent-amethyst-500)] shadow-[0_0_50px_rgba(157,78,221,0.2)] rounded-[var(--radius-lg)] overflow-hidden transition-all duration-500 transform ${isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-10'}`}>
         
         {/* Header Bar */}
         <div className="flex justify-between items-start md:items-center p-4 border-b border-[var(--line-soft)] bg-[var(--bg-overlay)]">
           <div className="flex items-center gap-2 mt-2 md:mt-0">
-            <div className="w-2 h-2 rounded-full bg-[var(--accent-emerald-500)] animate-pulse"></div>
+            <span className="text-[var(--accent-emerald-500)] font-bold">•</span>
             <span className="font-mono text-[10px] md:text-xs text-[var(--accent-emerald-500)] tracking-widest uppercase">
               {currentCopy.headline}
             </span>
           </div>
           
-          {/* Language Selector - Vertical Stack Style */}
+          {/* Language Selector */}
           <div className="flex gap-2">
             <LangButton 
               code="EN" 
@@ -153,25 +149,41 @@ const ConnectionRequest: React.FC<Props> = ({ onProceed, language, setLanguage }
         </div>
 
         {/* Content Body */}
-        <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[60vh] md:max-h-none scrollbar-thin">
+        <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[65vh] md:max-h-none scrollbar-thin">
           
           {/* Intro */}
           <div className="text-sm md:text-base leading-relaxed text-[var(--text-primary)]">
             {renderText(currentCopy.intro)}
           </div>
 
-          {/* Bullets (4 Steps) */}
-          <div className="space-y-4 pl-4 border-l-2 border-[var(--line-soft)]">
-            {currentCopy.bullets.map((b, i) => (
-              <div key={i} className="text-xs md:text-sm">
-                <span className="text-[var(--accent-topaz-500)] font-bold tracking-wider block mb-1">{b.label}</span>
-                <span className="text-[var(--text-secondary)]">{b.text}</span>
+          <p className="font-mono text-xs text-[var(--text-secondary)] uppercase tracking-wider">
+            {currentCopy.subtitle}
+          </p>
+
+          {/* Action Grid */}
+          <div className="space-y-4">
+            {currentCopy.actions.map((action, i) => (
+              <div 
+                key={i} 
+                className="flex items-start gap-4 p-4 rounded border-l-2 border-[var(--accent-emerald-500)] bg-[var(--accent-emerald-500)]/5 hover:bg-[var(--accent-emerald-500)]/10 transition-colors"
+              >
+                <span className="font-mono font-bold text-[var(--accent-emerald-500)] text-sm pt-0.5 min-w-[1.5rem]">
+                  {action.id}.
+                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="font-display font-bold text-sm tracking-wide text-[var(--text-primary)]">
+                    {action.title}
+                  </span>
+                  <span className="text-xs text-[var(--text-secondary)] font-mono leading-tight">
+                    {action.desc}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
 
           {/* Outro */}
-          <p className="text-xs md:text-sm text-[var(--text-muted)] italic">
+          <p className="text-xs md:text-sm text-[var(--text-muted)] italic pt-2">
             {currentCopy.outro}
           </p>
 

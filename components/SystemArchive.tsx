@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -336,7 +337,7 @@ const SystemArchive: React.FC<Props> = ({ onClose, onOpenCalendar, onStartGame, 
                     onClick={isShowcase ? onContinue : onStartGame}
                     className="w-full py-3 px-4 bg-[var(--accent-emerald-500)] text-[var(--bg-void)] font-display font-bold text-lg hover:bg-[var(--accent-emerald-700)] transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
                 >
-                    {isShowcase ? '🚀 BUILD THIS >>' : '🎮 ENTER GAME MODE'}
+                    {isShowcase ? '🚀 BUILD THIS >>' : '🎮 PRESS START'}
                 </button>
             </div>
             
@@ -369,7 +370,7 @@ const SystemArchive: React.FC<Props> = ({ onClose, onOpenCalendar, onStartGame, 
                                 {isShowcase ? "PORTFOLIO SHOWCASE" : "RAID VICTORIES_ (PORTFOLIO)"}
                             </h2>
                             <p className="font-mono text-xs text-[var(--text-secondary)] tracking-widest uppercase mt-1">
-                                SYSTEMS FORGED IN FIRE. CHECK EXISTING SYSTEMS CREATED BY INDRADEV_ OR CREATE YOURS TOGETHER WITH DEV_
+                                SYSTEMS I'VE FORGED IN FIRE. EXPLORE MY WORK OR LET'S BUILD YOURS TOGETHER.
                             </p>
                         </div>
                         {!isShowcase && (
@@ -471,8 +472,12 @@ const SystemArchive: React.FC<Props> = ({ onClose, onOpenCalendar, onStartGame, 
                                         <div className="flex justify-between mt-1 px-1">
                                             {p.investment ? (
                                                 <>
-                                                    <span className="text-[9px] font-mono text-[var(--text-muted)]">INVESTMENT: {p.investment.cost}</span>
-                                                    <span className="text-[9px] font-mono text-[var(--text-muted)]">TIME: {p.investment.hours}h</span>
+                                                    <span className="text-[9px] font-mono text-[var(--text-muted)] tracking-tight">
+                                                        REPLICATION EST: <span className="text-[var(--text-primary)] opacity-90">{p.investment.cost}</span>
+                                                    </span>
+                                                    <span className="text-[9px] font-mono text-[var(--text-muted)] tracking-tight">
+                                                        DEPLOYMENT: <span className="text-[var(--accent-emerald-500)]">~{Math.ceil(p.investment.hours / 8)} DAYS</span>
+                                                    </span>
                                                 </>
                                             ) : (
                                                 <span className="text-[9px] font-mono text-[var(--text-muted)]">EST. COST: ~€2,500</span>

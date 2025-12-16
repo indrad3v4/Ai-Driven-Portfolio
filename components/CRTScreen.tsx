@@ -28,11 +28,11 @@ const CRTScreen: React.FC<CRTScreenProps> = ({ children, title, className = '', 
   return (
     <div className={`relative flex flex-col h-full ${className}`}>
         {title && (
-            <div className={`font-mono text-xs mb-2 tracking-widest ${titleColor}`}>
+            <div className={`font-mono text-xs mb-1 tracking-widest ${titleColor} relative z-30`}>
                 {">"} {title}
             </div>
         )}
-      <div className={`flex-1 relative overflow-hidden border-4 ${borderColor} ${bgClass} rounded-lg`}>
+      <div className={`flex-1 relative overflow-hidden border-2 md:border-4 ${borderColor} ${bgClass} rounded-lg`}>
         <div className="crt-overlay z-20 pointer-events-none"></div>
         <div className="relative z-10 h-full w-full overflow-auto p-4">
             {children}

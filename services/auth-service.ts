@@ -5,7 +5,7 @@
  */
 
 import { auth, db, googleProvider } from "../lib/firebase";
-import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, User } from "firebase/auth";
+import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, User, signInAnonymously } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, increment, collection, addDoc, query, where, getDocs } from "firebase/firestore";
 import { InsightCartridge } from "../lib/insight-object";
 
@@ -16,6 +16,15 @@ export interface UserProfile {
   credits: number;
   isPremium: boolean;
 }
+
+// Helper: Sanitize object for Firestore
+// Uses JSON serialization to strip non-serializable types and converts undefined to null
+const sanitizeForFirestore = (obj: any): any => {
+  return JSON.parse(JSON.stringify(obj, (key, value) => {
+    if (value === undefined) return null;
+    return value;
+  }));
+};
 
 // 1. LOGIN FLOW
 export const loginWithGoogle = async (): Promise<UserProfile | null> => {
@@ -48,14 +57,60 @@ export const loginWithGoogle = async (): Promise<UserProfile | null> => {
   }
 };
 
-// 2. SAVE WORKSPACE STATE
+// 2. SAVE WORKSPACE STATE (Authenticated)
 export const saveWorkspace = async (userId: string, cartridge: InsightCartridge) => {
     if (!userId) return;
     try {
         const workspaceRef = doc(db, "users", userId, "workspaces", cartridge.id);
-        await setDoc(workspaceRef, cartridge, { merge: true });
+        const cleanCartridge = sanitizeForFirestore(cartridge);
+        await setDoc(workspaceRef, cleanCartridge, { merge: true });
     } catch (e) {
         console.error("Save Failed", e);
+    }
+};
+
+// 2b. SAVE PUBLIC CARTRIDGE (Anonymous / Key-Based)
+export const savePublicCartridge = async (cartridge: InsightCartridge) => {
+    if (!cartridge.id) return;
+
+    // Ensure we have an auth session (Anonymous or otherwise) for RLS
+    if (!auth.currentUser) {
+        try {
+            await signInAnonymously(auth);
+        } catch (e) {
+            console.warn("Anonymous auth attempt failed (save)", e);
+        }
+    }
+
+    try {
+        const cleanCartridge = sanitizeForFirestore(cartridge);
+        await setDoc(doc(db, "public_cartridges", cartridge.id), cleanCartridge, { merge: true });
+        console.log("System Auto-Saved:", cartridge.id);
+    } catch (e: any) {
+        console.error("Auto-Save Failed", e.message);
+    }
+};
+
+// 2c. LOAD PUBLIC CARTRIDGE
+export const loadPublicCartridge = async (id: string): Promise<InsightCartridge | null> => {
+    // Ensure we have an auth session (Anonymous or otherwise) for RLS
+    if (!auth.currentUser) {
+        try {
+            await signInAnonymously(auth);
+        } catch (e) {
+            console.warn("Anonymous auth attempt failed (load)", e);
+        }
+    }
+
+    try {
+        const snap = await getDoc(doc(db, "public_cartridges", id));
+        if (snap.exists()) {
+            return snap.data() as InsightCartridge;
+        }
+        return null;
+    } catch (e) {
+        console.error("Load Failed", e);
+        return null;
     }
 };
 

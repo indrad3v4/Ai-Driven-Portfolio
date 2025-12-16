@@ -1,4 +1,6 @@
 
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -44,23 +46,18 @@ export interface TechTaskData {
     projectUrl?: string; // Context Anchor
     
     // 1. MISSION BRIEF (General Info)
-    // Content: Background, Audience, Core Problem, Solution Hypothesis, North Star, Timeline
     missionBrief: TechSection;
     
     // 2. TECH STACK (The How)
-    // Content: Frontend, Backend, Database, AI (Models), Orchestration, Vector DB
     techStack: TechSection;
     
     // 3. USER FLOW (The Structure)
-    // Content: Journey, Prompt Chains, Latency Budgets
     userFlow: TechSection;
     
     // 4. ROLES (Agent Swarm)
-    // Content: Specific Agents, Tools
     roles: TechSection;
     
     // 5. ADMIN (God Mode)
-    // Content: Dashboard, Observability, Cost Tracking
     admin: TechSection;
 
     estimation?: {
@@ -82,16 +79,65 @@ export interface TrizData {
     problemStatement: string;
 }
 
+// AMBIKA 8-STAGE DATA
+export interface AmbikaData {
+    insight?: string;
+    systemModel?: string;
+    resources?: string;
+    ifr?: string;
+    solution?: string;
+    channels?: string;
+    briefSummary?: string;
+    mainPyOutline?: string;
+    costEstimate?: {
+        hours: number;
+        cost: number;
+        timeline: string;
+    };
+}
+
+// NEW: The 5-Step Strategy Cascade (Legacy Support kept for types, but unused in new flow)
+export interface StrategyStep {
+    id: 'ASPIRATION' | 'WHERE' | 'HOW' | 'CAPABILITIES' | 'METRICS';
+    label: string;
+    question: string;
+    content: string;
+    status: 'PENDING' | 'ANALYZING' | 'LOCKED_IN';
+    insight?: string; // The "AI Analysis" of the input
+}
+
+export interface StrategyAnalysis {
+    detectedArchetype?: string | null; // e.g. "CREATOR"
+    suggestedFramework?: string | null; // e.g. "Blue Ocean Strategy"
+    hiddenNeed?: string | null; // e.g. "Validation"
+}
+
+export interface StrategyCascade {
+    currentStepIndex: number; // 0-4
+    tutorialViewed: boolean; // Has the user seen the rules?
+    analysis?: StrategyAnalysis; // Psychological profile
+    steps: {
+        winningAspiration: StrategyStep;
+        whereToPlay: StrategyStep;
+        howToWin: StrategyStep;
+        capabilities: StrategyStep;
+        metrics: StrategyStep;
+    };
+}
+
 export interface InsightCartridge {
     id: string;
     userName?: string;    // The Architect's name
     credits: number;      // Economy resource (1.0 per turn)
     
-    mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER'; // NEW: Operation Mode
+    mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' | 'STRATEGY_SESSION'; 
 
     hero: Character;      // Driver (Emerald Energy)
     villain: Character;   // Barrier (Ruby Energy)
     tension: number;      // 0-100 Conflict Magnitude
+    
+    // RPG LAYER: The Boss Health
+    entropy: number;      // 100 (Chaos) -> 0 (Order)
     
     // The 4 Lenses of Systematization (GAME MODE)
     quadrants: {
@@ -106,7 +152,14 @@ export interface InsightCartridge {
 
     // TRIZ Solver Data (TRIZ_SOLVER MODE)
     triz?: TrizData;
+
+    // Strategy Session Data (STRATEGY_SESSION MODE)
+    strategyCascade?: StrategyCascade;
     
+    // NEW: AMBIKA 8-STAGE JOURNEY STATE
+    ambikaStage: number; // 0-8
+    ambikaData: AmbikaData;
+
     chatHistory: { role: 'user' | 'model' | 'system', content: string }[];
     systemSpec: SystemSpec | null; // The "Saved Code" artifact
     
@@ -114,9 +167,13 @@ export interface InsightCartridge {
     cabinetUnlocked: boolean; // Tracks if user has entered the secret code
 }
 
-export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' = 'GAME'): InsightCartridge => ({
-    id: crypto.randomUUID(),
-    credits: 10, // 10 free turns (Enhanced Starter Pack)
+export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' | 'STRATEGY_SESSION' = 'STRATEGY_SESSION'): InsightCartridge => ({
+    // Use polyfill for UUID to ensure compatibility in all webviews/social browsers
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    }),
+    credits: 8, // 8 Stages = 8 Credits
     mode: mode,
     hero: {
         name: 'HERO',
@@ -133,12 +190,57 @@ export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' 
         traits: []
     },
     tension: 0,
+    entropy: 100, // Starts at max chaos
     quadrants: {
         strategy: { level: 0, notes: [], status: 'ACTIVE' },
         creative: { level: 0, notes: [], status: 'LOCKED' },
         producing: { level: 0, notes: [], status: 'LOCKED' },
         media: { level: 0, notes: [], status: 'LOCKED' }
     },
+    // Initialize Strategy Cascade for the new mode
+    strategyCascade: mode === 'STRATEGY_SESSION' ? {
+        currentStepIndex: 0,
+        tutorialViewed: false,
+        // FIRESTORE FIX: Initialize with null, not undefined
+        analysis: { detectedArchetype: null, suggestedFramework: null, hiddenNeed: null },
+        steps: {
+            winningAspiration: { 
+                id: 'ASPIRATION', 
+                label: 'WINNING ASPIRATION', 
+                question: 'What is your WINNING ASPIRATION?', 
+                content: '', 
+                status: 'PENDING' 
+            },
+            whereToPlay: { 
+                id: 'WHERE', 
+                label: 'WHERE TO PLAY', 
+                question: 'WHERE WILL YOU PLAY?', 
+                content: '', 
+                status: 'PENDING' 
+            },
+            howToWin: { 
+                id: 'HOW', 
+                label: 'HOW TO WIN', 
+                question: 'HOW WILL YOU WIN?', 
+                content: '', 
+                status: 'PENDING' 
+            },
+            capabilities: { 
+                id: 'CAPABILITIES', 
+                label: 'CORE CAPABILITIES', 
+                question: 'WHAT CAPABILITIES MUST YOU HAVE?', 
+                content: '', 
+                status: 'PENDING' 
+            },
+            metrics: { 
+                id: 'METRICS', 
+                label: 'METRICS OF SUCCESS', 
+                question: 'WHAT METRICS DO YOU NEED TO TRACK?', 
+                content: '', 
+                status: 'PENDING' 
+            }
+        }
+    } : undefined,
     techTask: mode === 'TECH_TASK' ? {
         missionBrief: { status: 'PENDING', content: '' },
         techStack: { status: 'PENDING', content: '' },
@@ -162,74 +264,56 @@ export const createEmptyCartridge = (mode: 'GAME' | 'TECH_TASK' | 'TRIZ_SOLVER' 
             { id: 8, name: 'DEPLOYMENT', status: 'PENDING' }
         ]
     } : undefined,
+    ambikaStage: 0,
+    ambikaData: {},
     chatHistory: [],
     systemSpec: null,
     status: 'EMPTY',
     cabinetUnlocked: false
 });
 
-/**
- * The "Gameplay Loop" where the Agent (Joystick) manipulates the Insight (Cartridge).
- * Ensures deep merging to prevent overwriting nested state.
- */
 export const updateCartridgeProgress = (
     cartridge: InsightCartridge, 
     delta: Partial<InsightCartridge>
 ): InsightCartridge => {
     
-    // Default structure to ensure safety against partial objects
-    const defaultTechTask: TechTaskData = {
-        missionBrief: { status: 'PENDING', content: '' },
-        techStack: { status: 'PENDING', content: '' },
-        userFlow: { status: 'PENDING', content: '' },
-        roles: { status: 'PENDING', content: '' },
-        admin: { status: 'PENDING', content: '' },
-        estimation: { hours: 0, cost: 0, locked: false }
-    };
+    // Merge Strategy Cascade (Legacy support)
+    let nextStrategyCascade = cartridge.strategyCascade;
+    if (delta.strategyCascade) {
+        const prevAnalysis = cartridge.strategyCascade?.analysis || {};
+        const deltaAnalysis = delta.strategyCascade.analysis || {};
+        
+        nextStrategyCascade = {
+            ...cartridge.strategyCascade,
+            ...delta.strategyCascade,
+            analysis: { ...prevAnalysis, ...deltaAnalysis },
+            steps: {
+                ...cartridge.strategyCascade?.steps,
+                ...(delta.strategyCascade.steps || {})
+            }
+        } as StrategyCascade;
+    }
 
-    // Construct the base task by safely merging defaults. 
-    const existingTask = (cartridge.techTask || {}) as Partial<TechTaskData>;
-    const baseTechTask: TechTaskData = {
-        userName: existingTask.userName,
-        projectUrl: existingTask.projectUrl, 
-        missionBrief: existingTask.missionBrief || defaultTechTask.missionBrief,
-        techStack: existingTask.techStack || defaultTechTask.techStack,
-        userFlow: existingTask.userFlow || defaultTechTask.userFlow,
-        roles: existingTask.roles || defaultTechTask.roles,
-        admin: existingTask.admin || defaultTechTask.admin,
-        estimation: existingTask.estimation || defaultTechTask.estimation
-    };
+    // Merge Ambika Data
+    const nextAmbikaData = { ...cartridge.ambikaData, ...(delta.ambikaData || {}) };
+    const nextAmbikaStage = delta.ambikaStage !== undefined ? delta.ambikaStage : cartridge.ambikaStage;
 
-    const deltaTechTask = (delta.techTask || {}) as Partial<TechTaskData>;
+    // Entropy Calc
+    let nextEntropy = delta.entropy !== undefined ? delta.entropy : cartridge.entropy;
     
-    // Only construct merged task if one exists or is being added
-    const shouldHaveTask = !!(cartridge.techTask || delta.techTask);
-
-    const mergedTechTask: TechTaskData | undefined = shouldHaveTask ? {
-        ...baseTechTask,
-        ...deltaTechTask,
-        // Deep merge individual sections
-        missionBrief: { ...baseTechTask.missionBrief, ...(deltaTechTask.missionBrief || {}) },
-        techStack: { ...baseTechTask.techStack, ...(deltaTechTask.techStack || {}) },
-        userFlow: { ...baseTechTask.userFlow, ...(deltaTechTask.userFlow || {}) },
-        roles: { ...baseTechTask.roles, ...(deltaTechTask.roles || {}) },
-        admin: { ...baseTechTask.admin, ...(deltaTechTask.admin || {}) },
-        // TRIZ Principle #13: Deep merge estimation to prevent overwrite by partial data
-        estimation: { ...baseTechTask.estimation, ...(deltaTechTask.estimation || {}) }
-    } : undefined;
+    // Entropy based on 8 Stages
+    if (cartridge.mode === 'STRATEGY_SESSION') {
+        const totalStages = 8;
+        const current = nextAmbikaStage;
+        nextEntropy = Math.max(0, 100 - ((current / totalStages) * 100));
+    }
 
     const updated = {
         ...cartridge,
         ...delta,
-        hero: { ...cartridge.hero, ...(delta.hero || {}) },
-        villain: { ...cartridge.villain, ...(delta.villain || {}) },
-        quadrants: { 
-            strategy: { ...cartridge.quadrants.strategy, ...(delta.quadrants?.strategy || {}) },
-            creative: { ...cartridge.quadrants.creative, ...(delta.quadrants?.creative || {}) },
-            producing: { ...cartridge.quadrants.producing, ...(delta.quadrants?.producing || {}) },
-            media: { ...cartridge.quadrants.media, ...(delta.quadrants?.media || {}) }
-        },
-        techTask: mergedTechTask
+        entropy: nextEntropy,
+        ambikaData: nextAmbikaData,
+        strategyCascade: nextStrategyCascade
     };
     return updated;
 };

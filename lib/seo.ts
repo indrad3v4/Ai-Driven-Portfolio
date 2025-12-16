@@ -1,3 +1,4 @@
+
 /**
  * @license SPDX-License-Identifier: Apache-2.0
  * SEO Utilities: Meta tags + JSON-LD schema generation
@@ -200,16 +201,17 @@ export const injectJsonLd = (schema: object, scriptId: string = 'json-ld') => {
   console.log(`[SEO] JSON-LD schema injected (${scriptId})`);
 };
 
-const DEFAULT_IMAGE = 'https://indra-ai.dev/og-image.png';
+// TRIZ Principle: Query parameter separation in time
+const DEFAULT_IMAGE = 'https://indra-ai.dev/og-image.png?v=5';
 
 /**
  * Page-specific SEO config
  */
 export const PAGE_SEO_CONFIG = {
   landing: {
-    title: 'Indra-AI: Ship AI Systems in 2 Weeks',
+    title: 'Indra-AI | Custom AI Systems & Agents',
     description:
-      'We ship working AI systems in 2 weeks, not 6 months. Built for early-stage products, internal tools, and builders who need clarity.',
+      'You need to advertize your brand? I build custom ai-systems and agents — for advertise your core message to any audience.',
     ogImage: DEFAULT_IMAGE,
     keywords: [
       'AI systems',

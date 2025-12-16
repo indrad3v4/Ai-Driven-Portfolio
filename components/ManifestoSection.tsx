@@ -1,247 +1,262 @@
 
 /**
  * @license SPDX-License-Identifier: Apache-2.0
- * Manifesto Section: Madhukaramayī (Honey Clarity) + SEO Schema
- * Replaces vague footer tagline with value-driven manifesto.
- * Injects real-time Google Trends data using Gemini 2.5 Flash.
+ * Manifesto Section: The Core Philosophy
+ * Structure: Left (Beliefs) | Right (Methodology/Correctly)
+ * Aligned with AMBIKA 8-Step System logic.
  */
 
 import React, { useEffect, useState } from 'react';
 import { generateOrganizationSchema, generateServiceSchema, injectJsonLd } from '../lib/seo';
 import { getTrendingAIKeywords } from '../services/gemini';
+import RetroButton from './RetroButton';
 
 interface ManifestoSectionProps {
-  showFullManifesto?: boolean; // true = hero section, false = footer
-  onAction?: () => void; // Callback for the main CTA button
+  showFullManifesto?: boolean; // Kept for interface compatibility, though this design is intended for full view
+  onAction?: () => void;
 }
 
-/**
- * Honey Statement: The core value manifesto
- */
-const HONEY_STATEMENT = {
-  headline: 'INDRADEVA MANIFESTO',
-  subHeadline: 'We ship working AI in 2 weeks, not 6 months of vaporware.',
-  body: `Built for early-stage product teams, internal tools, and builders who need proof before pivot. You don't need an AI lab — you need a neural link to clarity. That's Indra.`,
-
-  // Evergreen keywords for static SEO (Crawlers see this)
-  staticKeywords: [
-    'AI Systems',
-    'Product Teams',
-    'Neural Link',
-    'Clarity',
-    'Rapid Deployment',
-    'Builders',
-    'Internal Tools',
-  ],
-
-  longForm: `Our AI solves the $2B problem: teams build vaporware while competitors ship. We architect AI systems that work *now*—not in 6 months behind a "coming soon" button. 
-
-Our approach: 2-week delivery cycles, provable outcomes, built for Ambika (the warrior architect in you). We connect insight (strategy) to creation (output) through a neural interface you control.
-
-Clients: early-stage products, internal team augmentation, builders who value execution over theory.
-
-Why now: AI moves fast. Your team deserves a partner who ships as fast as your ambition.`,
-
-  vedic: {
-    concept: 'मधुकरमयी (Madhukaramayī)',
-    meaning: 'Honey-laden clarity that draws seekers like bees',
-    principle: 'One manifesto. One target. One golden why.',
+const MANIFESTO_DATA = {
+  title: "INDRADEVA MANIFESTO",
+  left: {
+    title: "MANIFESTO",
+    header: "Systems solve problems. AI systems that *scale your insight* are the future of brand, product, and organizational growth.",
+    beliefs: [
+      { id: 1, text: "**Belief 1:** Your core message is hidden until you see it through a system. Not a tool. A system." },
+      { id: 2, text: "**Belief 2:** Speed is not just fast delivery. Speed is clarity first, then execution. Clarity kills scope creep." },
+      { id: 3, text: "**Belief 3:** Every brand has an insight underneath their goal. We architect systems that turn insight into competitive edge." },
+      { id: 4, text: "**Belief 4:** AI is not magic. It's a neural interface you control. Custom agents that work *now*, not promises." }
+    ]
   },
+  right: {
+    title: "CORRECTLY",
+    whatIDo: [
+      "Architect AI systems that scale your insight to any audience",
+      "Connect strategy (your north star) to creation (working agents) via TRIZ methodology",
+      "Use self-orchestrating workflows: agents that coordinate without overhead",
+      "Deliver in sprints: architecture → code → production in 2–4 weeks"
+    ],
+    whatIDont: [
+      "Long consultations that never ship (analysis paralysis)",
+      "Generic templates or \"plug-and-play\" solutions",
+      "Vague promises like \"AI will solve it\" (it won't, unless designed right)",
+      "Long projects without checkpoint releases and learning loops"
+    ],
+    howIWork: {
+      intro: "8-Step System (not guesswork):",
+      steps: [
+        "1. Extract your insight (what you really need)",
+        "2. Model the contradiction (what blocks you)",
+        "3. Design the solution (using TRIZ algorithms)",
+        "4. Estimate cost & timeline (realistic)",
+        "5. Build the system (agent orchestration)",
+        "6. Test and iterate (feedback loops)",
+        "7. Deploy and monitor",
+        "8. Optimize and scale"
+      ],
+      outro: "No step skipped. Clarity before code."
+    }
+  }
 };
 
 export const ManifestoSection: React.FC<ManifestoSectionProps> = ({
-  showFullManifesto = false,
+  showFullManifesto = true,
   onAction
 }) => {
-  const [trendingKeywords, setTrendingKeywords] = useState<string[]>(HONEY_STATEMENT.staticKeywords);
+  const [trendingKeywords, setTrendingKeywords] = useState<string[]>(['AI Systems', 'TRIZ', 'Ambika', 'Neural Link']);
   const [isLoadingTrends, setIsLoadingTrends] = useState(true);
 
-  // 1. SEO Injection (Static Schema)
+  // 1. SEO Injection
   useEffect(() => {
     const orgSchema = generateOrganizationSchema({
         name: 'Indra-AI',
-        description: HONEY_STATEMENT.body,
+        description: MANIFESTO_DATA.left.header,
         url: window.location.origin,
         foundingDate: '2024',
         email: 'contact@indra-ai.dev'
     });
     
-    const serviceSchema = generateServiceSchema({
-        name: 'AI System Architecture',
-        description: HONEY_STATEMENT.longForm,
-        provider: 'Indra-AI',
-        deliveryTime: 14
-    });
-
-    injectJsonLd([orgSchema, serviceSchema], 'manifesto-schema');
+    injectJsonLd(orgSchema, 'manifesto-schema');
   }, []);
 
-  // 2. Dynamic Trend Injection (Live Data from Gemini + Google Search)
+  // 2. Dynamic Trend Injection
   useEffect(() => {
     let isMounted = true;
-    
     const fetchLiveTrends = async () => {
       try {
-        // Ask Gemini 2.5 Flash to browse the web for today's top AI dev trends
         const liveTrends = await getTrendingAIKeywords();
-        
         if (isMounted && liveTrends && liveTrends.length > 0) {
-          // Merge with static keywords, but prioritize new ones
-          // Take top 5 live trends + top 3 static keywords
-          const combined = [
-            ...liveTrends.slice(0, 5),
-            ...HONEY_STATEMENT.staticKeywords.slice(0, 3)
-          ];
-          setTrendingKeywords(combined);
+          setTrendingKeywords(liveTrends.slice(0, 5));
         }
       } catch (e) {
-        console.warn("Trend fetch failed, using static keywords", e);
+        // Fallback silently
       } finally {
         if (isMounted) setIsLoadingTrends(false);
       }
     };
-
     fetchLiveTrends();
-
     return () => { isMounted = false; };
   }, []);
 
+  const renderBold = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={i} className="text-[var(--accent-amethyst-500)] font-bold">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('*') && part.endsWith('*')) {
+             return <em key={i} className="text-[var(--text-primary)] not-italic border-b border-[var(--accent-emerald-500)]">{part.slice(1, -1)}</em>;
+        }
+        return part;
+    });
+  };
+
   return (
-    <section className="manifesto-section mt-4 mb-4 h-full flex flex-col">
-        <div className="manifesto-container flex-1 flex flex-col justify-between">
+    <section className="w-full h-full bg-[var(--bg-void)] text-[var(--text-primary)] overflow-y-auto scrollbar-thin">
+        <div className="max-w-6xl mx-auto px-4 py-12 md:py-16">
           
-          {/* --- HEADER --- */}
-          <div className="text-center mb-8">
-             <h2 className="manifesto-headline text-[var(--accent-topaz-500)] animate-pulse">
-                {HONEY_STATEMENT.headline}
-            </h2>
-            <div className="h-[1px] w-24 bg-[var(--line-soft)] mx-auto mt-4"></div>
-          </div>
-
-          {/* --- BODY (THE HONEY) --- */}
-          <div className="text-left space-y-6">
-            <h3 className="font-display text-2xl md:text-3xl text-white leading-tight">
-              {HONEY_STATEMENT.subHeadline}
-            </h3>
-            
-            <p className="manifesto-body text-lg">
-              {HONEY_STATEMENT.body}
-            </p>
-
-            {showFullManifesto && (
-                <div className="manifesto-extended">
-                <p className="whitespace-pre-wrap font-mono text-sm text-[var(--text-secondary)]">
-                    {HONEY_STATEMENT.longForm}
-                </p>
+          {/* TITLE */}
+          <div className="text-center mb-12">
+             <h1 className="font-display text-4xl md:text-6xl text-[var(--accent-topaz-500)] tracking-widest uppercase mb-4 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                {MANIFESTO_DATA.title}
+            </h1>
+            <div className="flex items-center justify-center gap-4">
+                <div className="h-[1px] w-12 bg-[var(--line-soft)]"></div>
+                <div className="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-[0.3em]">
+                    SYSTEM ARCHITECTURE v1.0
                 </div>
-            )}
+                <div className="h-[1px] w-12 bg-[var(--line-soft)]"></div>
+            </div>
           </div>
 
-          {/* --- LIVE INTELLIGENCE CLOUD --- */}
-          <div className="my-8">
-             <div className="flex items-center gap-2 mb-3">
-                <span className={`w-2 h-2 rounded-full ${isLoadingTrends ? 'bg-yellow-500 animate-ping' : 'bg-green-500'}`}></span>
-                <span className="font-mono text-[10px] text-[var(--text-muted)] tracking-widest uppercase">
-                    {isLoadingTrends ? 'SCANNING LIVE TRENDS...' : 'LIVE INTELLIGENCE STREAM'}
-                </span>
-             </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
+
+            {/* --- LEFT: MANIFESTO (BELIEFS) --- */}
+            <div className="bg-[var(--bg-surface)]/30 border border-[var(--line-soft)] rounded-[var(--radius-lg)] p-6 md:p-10 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-1 h-full bg-[var(--accent-amethyst-500)]"></div>
+                
+                <h2 className="font-display text-3xl text-[var(--text-primary)] mb-6 pb-4 border-b border-[var(--line-soft)] uppercase tracking-wider">
+                    {MANIFESTO_DATA.left.title}
+                </h2>
+                
+                <p className="font-body text-lg md:text-xl text-[var(--text-secondary)] italic mb-8 leading-relaxed">
+                    {renderBold(MANIFESTO_DATA.left.header)}
+                </p>
+
+                <div className="space-y-6">
+                    {MANIFESTO_DATA.left.beliefs.map((b) => (
+                        <div key={b.id} className="pl-4 border-l-2 border-[var(--accent-amethyst-500)]/50 hover:border-[var(--accent-amethyst-500)] transition-colors">
+                            <p className="text-sm md:text-base leading-relaxed text-[var(--text-secondary)]">
+                                {renderBold(b.text)}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Background Decoration */}
+                <div className="absolute -bottom-10 -right-10 text-[10rem] opacity-5 pointer-events-none select-none text-[var(--accent-amethyst-500)]">
+                    ⚡
+                </div>
+            </div>
+
+            {/* --- RIGHT: CORRECTLY (METHODOLOGY) --- */}
+            <div className="bg-[var(--bg-surface)]/30 border border-[var(--line-soft)] rounded-[var(--radius-lg)] p-6 md:p-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-1 h-full bg-[var(--accent-emerald-500)]"></div>
+
+                <h2 className="font-display text-3xl text-[var(--text-primary)] mb-6 pb-4 border-b border-[var(--line-soft)] uppercase tracking-wider">
+                    {MANIFESTO_DATA.right.title}
+                </h2>
+
+                <div className="space-y-8">
+                    
+                    {/* WHAT I DO */}
+                    <div className="space-y-3">
+                        <h3 className="font-mono text-xs font-bold text-[var(--accent-emerald-500)] uppercase tracking-widest flex items-center gap-2">
+                            <span>✓</span> WHAT I DO
+                        </h3>
+                        <ul className="space-y-2">
+                            {MANIFESTO_DATA.right.whatIDo.map((item, i) => (
+                                <li key={i} className="text-sm text-[var(--text-secondary)] flex items-start gap-2">
+                                    <span className="text-[var(--accent-emerald-500)] font-bold mt-[1px]">→</span>
+                                    <span>{item}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    {/* WHAT I DONT DO */}
+                    <div className="space-y-3">
+                        <h3 className="font-mono text-xs font-bold text-[var(--accent-ruby-500)] uppercase tracking-widest flex items-center gap-2">
+                            <span>✗</span> WHAT I DON'T DO
+                        </h3>
+                        <ul className="space-y-2">
+                            {MANIFESTO_DATA.right.whatIDont.map((item, i) => (
+                                <li key={i} className="text-sm text-[var(--text-secondary)] flex items-start gap-2">
+                                    <span className="text-[var(--accent-ruby-500)] font-bold mt-[1px]">×</span>
+                                    <span>{item}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    {/* HOW I WORK */}
+                    <div className="bg-[var(--bg-void)] border border-[var(--line-soft)] p-4 rounded">
+                        <h3 className="font-mono text-xs font-bold text-[var(--accent-sapphire-500)] uppercase tracking-widest mb-3">
+                            ⚙ {MANIFESTO_DATA.right.howIWork.intro}
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                            {MANIFESTO_DATA.right.howIWork.steps.map((step, i) => (
+                                <div key={i} className="text-[10px] md:text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                                    {step}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-3 pt-2 border-t border-[var(--line-soft)] text-[10px] font-mono text-[var(--accent-sapphire-500)] text-center tracking-widest uppercase">
+                            {MANIFESTO_DATA.right.howIWork.outro}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+          </div>
+
+          {/* --- FOOTER: LIVE INTELLIGENCE & CTA --- */}
+          <div className="mt-12 md:mt-16 flex flex-col items-center gap-8">
              
-             <div className="keyword-cloud">
-                {trendingKeywords.map((keyword, idx) => (
-                <span key={idx} className="keyword-badge animate-in fade-in slide-in-from-bottom-2 duration-500" style={{animationDelay: `${idx * 100}ms`}}>
-                    {keyword}
-                </span>
-                ))}
-            </div>
-          </div>
+             {/* Keyword Stream */}
+             <div className="w-full overflow-hidden relative">
+                <div className="flex items-center justify-center gap-2 mb-2 opacity-70">
+                    <span className={`w-1.5 h-1.5 rounded-full ${isLoadingTrends ? 'bg-yellow-500 animate-ping' : 'bg-[var(--accent-emerald-500)]'}`}></span>
+                    <span className="font-mono text-[9px] text-[var(--text-muted)] tracking-widest uppercase">
+                        LIVE INTELLIGENCE STREAM
+                    </span>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                    {trendingKeywords.map((k, i) => (
+                        <span key={i} className="px-2 py-1 bg-[var(--bg-surface)] border border-[var(--line-soft)] rounded text-[10px] font-mono text-[var(--accent-sapphire-500)]">
+                            {k}
+                        </span>
+                    ))}
+                </div>
+             </div>
 
-          {/* --- CTA (ACTIONABLE) --- */}
-          <div className="mt-auto mb-8">
-             <button 
-                onClick={onAction}
-                className="w-full py-4 bg-[var(--accent-amethyst-500)]/10 border border-[var(--accent-amethyst-500)] hover:bg-[var(--accent-amethyst-500)] hover:text-white text-[var(--accent-amethyst-500)] font-display text-xl tracking-widest rounded transition-all group"
-             >
-                <span className="group-hover:hidden">READY TO SHIP?</span>
-                <span className="hidden group-hover:inline">ARCHITECT YOUR CLARITY {'>'}</span>
-             </button>
-          </div>
+             {/* MAIN ACTION */}
+             <div className="w-full max-w-md">
+                 <button 
+                    onClick={onAction}
+                    className="w-full py-4 bg-[var(--accent-amethyst-500)] text-white font-display text-2xl tracking-[0.2em] rounded shadow-[0_0_30px_rgba(157,78,221,0.4)] hover:scale-105 transition-transform hover:shadow-[0_0_50px_rgba(157,78,221,0.6)] animate-pulse"
+                 >
+                    ARCHITECT YOUR SYSTEM {'>'}
+                 </button>
+                 <p className="text-center font-mono text-[9px] text-[var(--text-muted)] mt-2">
+                     INITIATE AMBIKA PROTOCOL • NO COST TO START
+                 </p>
+             </div>
 
-          {/* --- VEDIC FOOTER (SIGNATURE) --- */}
-          <div className="text-center border-t border-[var(--line-soft)] pt-6 mt-4 opacity-60 hover:opacity-100 transition-opacity">
-            <div className="vedic-badge inline-flex items-center gap-2 mb-2">
-                <span className="vedic-symbol text-2xl filter drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]">🍯</span>
-            </div>
-            <div className="font-mono text-[10px] text-[#ffd700] tracking-[0.2em] uppercase">
-                 {HONEY_STATEMENT.vedic.concept}
-            </div>
-            <div className="font-mono text-[8px] text-[var(--text-muted)] mt-1">
-                {HONEY_STATEMENT.vedic.meaning}
-            </div>
           </div>
 
         </div>
-
-        <style>{`
-          .manifesto-section {
-            /* Reset standard section padding to fit modal */
-            padding: 1rem 0;
-          }
-
-          .manifesto-container {
-            max-width: 600px;
-            margin: 0 auto;
-            width: 100%;
-          }
-
-          .manifesto-headline {
-            font-family: var(--font-display);
-            font-size: 3rem;
-            font-weight: 900;
-            letter-spacing: 0.1em;
-            line-height: 1;
-          }
-
-          .manifesto-body {
-            font-family: var(--font-body);
-            font-weight: 300;
-            color: var(--text-primary);
-            opacity: 0.9;
-            border-left: 2px solid var(--accent-emerald-500);
-            padding-left: 1rem;
-          }
-
-          .manifesto-extended {
-            padding: 1rem;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 0.25rem;
-            border: 1px solid var(--line-soft);
-          }
-
-          .keyword-cloud {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-          }
-
-          .keyword-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            background: rgba(0, 255, 150, 0.05);
-            border: 1px solid rgba(0, 255, 150, 0.2);
-            border-radius: 2px;
-            font-size: 0.7rem;
-            color: var(--accent-emerald-500);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-family: var(--font-mono);
-          }
-          
-          /* Mobile adjustments */
-          @media (max-width: 768px) {
-             .manifesto-headline { font-size: 2rem; }
-             .manifesto-body { font-size: 1rem; }
-          }
-        `}</style>
     </section>
   );
 };
