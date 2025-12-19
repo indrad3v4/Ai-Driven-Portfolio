@@ -5,7 +5,7 @@
  */
 
 const RELATIVE_PROXY = '/proxy_gemini';
-// Standardized to 'callGemini' as per your Firebase console logs
+// Updated to us-west1 and proxy_gemini endpoint as requested
 const ABSOLUTE_PROXY = 'https://us-west1-indra-flywheel-db.cloudfunctions.net/proxy_gemini';
 
 const REQUEST_TIMEOUT = 15000; 
@@ -110,9 +110,6 @@ export async function callGeminiViaProxy(request: ProxyRequest, modelOverride?: 
       }, REQUEST_TIMEOUT);
 
       if (!response.ok) {
-        if (response.status === 404 && currentUrl === RELATIVE_PROXY) {
-            throw new Error("RELATIVE_PATH_NOT_FOUND");
-        }
         if (response.status === 429) throw new Error("RATE_LIMIT_REACHED");
         const text = await response.text();
         throw new Error(`SERVER_ERROR_${response.status} - ${text}`);

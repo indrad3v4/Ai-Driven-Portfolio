@@ -7,8 +7,8 @@
 const functions = require("firebase-functions");
 require('dotenv').config(); 
 
-// --- DEPLOYMENT_VERSION: 1.0.4 ---
-// (Change this number to force Firebase to redeploy)
+// --- DEPLOYMENT_VERSION: 1.0.6 ---
+// Syncing with us-west1 region and proxy_gemini naming convention
 
 const proxyHandler = functions
   .runWith({ 
@@ -16,7 +16,7 @@ const proxyHandler = functions
     memory: '512MB',
     maxInstances: 50
   })
-  .region('us-central1')
+  .region('us-west1')
   .https.onRequest(async (req, res) => {
     // 1. CORS Headers
     res.set('Access-Control-Allow-Origin', '*'); 
@@ -36,27 +36,27 @@ const proxyHandler = functions
 
     try {
       let parsedBody = req.body;
-      if (typeof parsedBody === 'string') {
+      
+      // Robust Parsing: Handle cases where Firebase doesn't auto-parse JSON
+      if (typeof parsedBody === 'string' && parsedBody.trim().startsWith('{')) {
           try {
               parsedBody = JSON.parse(parsedBody);
           } catch (e) {
-              console.warn("[Proxy] Body manual parse failed", e);
+              console.error("[Proxy] JSON Parse Error:", e.message);
           }
       }
 
-      // IMPROVED HEALTH CHECK:
-      // If it's a "ping" or just doesn't look like a standard Gemini request, 
-      // return a status report instead of a 400 error from Google.
-      const isGeminiRequest = parsedBody && (parsedBody.contents || parsedBody.prompt);
+      // Check if it's a valid object and looks like a Gemini request
+      const isObject = parsedBody && typeof parsedBody === 'object';
+      const isGeminiRequest = isObject && (parsedBody.contents || parsedBody.prompt);
       
       if (!isGeminiRequest) {
           res.status(200).json({ 
             success: true, 
             status: "ONLINE", 
-            gateway: "INDRA_UPLINK_v1.0.4",
-            message: "Uplink stable. Send 'contents' array for processing.",
-            timestamp: new Date().toISOString(),
-            echo: parsedBody // Echo back what we received for debugging
+            gateway: "INDRA_UPLINK_v1.0.6",
+            message: "Proxy is stable in us-west1. Awaiting Gemini-structured payload.",
+            timestamp: new Date().toISOString()
           });
           return;
       }
@@ -93,5 +93,5 @@ const proxyHandler = functions
     }
   });
 
-// Primary Export used by Firebase
-exports.callGemini = proxyHandler;
+// Renamed from callGemini to proxy_gemini to match rewrite rules and user requirement
+exports.proxy_gemini = proxyHandler;
