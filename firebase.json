@@ -1,3 +1,4 @@
+
 {
   "hosting": {
     "public": "dist",
@@ -22,6 +23,10 @@
       }
     ],
     "rewrites": [
+      {
+        "source": "/proxy_gemini",
+        "function": "proxy_gemini"
+      },
       {
         "source": "**",
         "destination": "/index.html"

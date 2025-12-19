@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -24,7 +25,6 @@ function createPcmBlob(data: Float32Array): { data: string; mimeType: string } {
   };
 }
 
-// Helper to decode base64 to binary string
 function decodeToBinary(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -35,7 +35,6 @@ function decodeToBinary(base64: string): Uint8Array {
   return bytes;
 }
 
-// Helper to decode raw PCM into an AudioBuffer
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -56,7 +55,6 @@ async function decodeAudioData(
 }
 
 export class VillainLiveClient {
-  private ai: GoogleGenAI;
   private activeSession: Promise<any> | null = null;
   private inputCtx: AudioContext | null = null;
   private outputCtx: AudioContext | null = null;
@@ -69,7 +67,6 @@ export class VillainLiveClient {
   private isConnecting: boolean = false;
 
   constructor(onStatusChange: (status: string, isActive: boolean) => void) {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     this.onStatusChange = onStatusChange;
   }
 
@@ -80,30 +77,39 @@ export class VillainLiveClient {
     try {
       this.onStatusChange("OPENING CHANNEL...", true);
 
-      // 1. Setup Audio Contexts (re-create if closed)
+      // Check if mediaDevices is available (might be blocked by lack of permissions in metadata.json)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Microphone access is disabled or unavailable.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
       this.inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       this.outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       
-      // Important: explicit resume for stricter browser autoplay policies
       await this.inputCtx.resume();
       await this.outputCtx.resume();
 
-      // 2. Get Mic Stream
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          // Aggressive noise/echo cancellation for clearer speech in game env
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-      }});
+      try {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
+            channelCount: 1,
+            sampleRate: 16000,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        }});
+      } catch (micError) {
+        console.warn("User denied microphone or hardware missing:", micError);
+        this.onStatusChange("MIC ACCESS DENIED. VOICE DISABLED.", false);
+        this.isConnecting = false;
+        this.cleanup();
+        return;
+      }
 
-      // 3. Establish Live Connection
-      const sessionPromise = this.ai.live.connect({
+      const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          // More aggressive/interactive system prompt
           systemInstruction: "You are the MAIN VILLAIN of this retro arcade game. The user is the HERO trying to beat your maze. You are arrogant, sarcastic, and evil. Your goal is to distract them. React immediately to anything they say with a short, punchy taunt. If they are silent, mock their fear. Keep responses under 2 sentences. NEVER be helpful. Assert your dominance.",
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
@@ -125,8 +131,7 @@ export class VillainLiveClient {
           },
           onerror: (err) => {
             console.error("Live API Error:", err);
-            // Often 503s mean overloaded preview model or network blip
-            this.onStatusChange("COMMS ERROR (RETRYING...)", false);
+            this.onStatusChange("COMMS ERROR", false);
             this.cleanup();
           }
         }
@@ -134,10 +139,10 @@ export class VillainLiveClient {
 
       this.activeSession = sessionPromise;
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to connect live client:", e);
       this.isConnecting = false;
-      this.onStatusChange("CONNECTION FAILED", false);
+      this.onStatusChange(e.message || "CONNECTION FAILED", false);
       this.cleanup();
     }
   }
@@ -146,29 +151,19 @@ export class VillainLiveClient {
     if (!this.inputCtx || !this.mediaStream) return;
 
     this.sourceNode = this.inputCtx.createMediaStreamSource(this.mediaStream);
-    // 4096 buffer size = ~256ms latency, good balance for ScriptProcessor stability
     this.workletNode = this.inputCtx.createScriptProcessor(4096, 1, 1);
 
     this.workletNode.onaudioprocess = (ev) => {
-        if (!this.activeSession) return;
-
         const inputData = ev.inputBuffer.getChannelData(0);
-        // Simple voice activity detection (optional optimization, but keeps stream constant for now)
         const pcmBlob = createPcmBlob(inputData);
         
         sessionPromise.then(session => {
-             // Ensure we don't send data if user already clicked disconnect
-             if (this.activeSession === sessionPromise) {
-                 session.sendRealtimeInput({ media: pcmBlob });
-             }
-        }).catch(() => {
-             // Squelch potential race condition errors on disconnect
-        });
+            session.sendRealtimeInput({ media: pcmBlob });
+        }).catch(() => {});
     };
 
     this.sourceNode.connect(this.workletNode);
     
-    // Mute local mic playback to prevent nasty feedback loops
     const muteNode = this.inputCtx.createGain();
     muteNode.gain.value = 0;
     this.workletNode.connect(muteNode);
@@ -188,7 +183,6 @@ export class VillainLiveClient {
             const pcmData = decodeToBinary(part.inlineData.data);
             const audioBuffer = await decodeAudioData(pcmData, this.outputCtx);
 
-            // Ensure smooth playback by scheduling next chunk at the end of previous
             this.nextStartTime = Math.max(this.nextStartTime, this.outputCtx.currentTime);
 
             const source = this.outputCtx.createBufferSource();
@@ -203,11 +197,10 @@ export class VillainLiveClient {
                 this.scheduledSources.delete(source);
             };
         } catch (e) {
-            console.error("Error decoding output audio:", e);
+            console.error("Error decoding audio:", e);
         }
     }
 
-    // Handle interruption (user speaks over model)
     if (message.serverContent?.interrupted) {
         this.scheduledSources.forEach(s => {
             try { s.stop(); } catch (e) {}
@@ -218,9 +211,6 @@ export class VillainLiveClient {
   }
 
   disconnect() {
-    // Trigger cleanup, which will also close standard WebSockets if SDK uses them internally
-    // The SDK doesn't expose an explicit .close() on the session promise result easily,
-    // but releasing all media/contexts usually forces a close from the browser side.
     this.cleanup();
     this.onStatusChange("", false);
   }

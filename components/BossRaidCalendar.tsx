@@ -81,8 +81,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
             }
 
             // 3. Fake Bookings (Deterministic Randomness)
-            // We use sin() based on the date to ensure the "randomness" is stable across re-renders
-            // but looks distributed.
             const seed = year * 10000 + month * 100 + d * 10 + h;
             const pseudoRandom = Math.abs(Math.sin(seed));
             
@@ -115,8 +113,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
     
     // Check status of a day for grid coloring
     const getDayStatus = (d: number) => {
-        // Just checking if any slot is booked in our custom state or fake state
-        // For performance, we just check simple date bounds for styling
         const checkDate = new Date(year, month, d);
         const now = new Date();
         now.setHours(0,0,0,0);
@@ -124,7 +120,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
         if (checkDate < now) return 'PAST';
         if (checkDate.getTime() === now.getTime()) return 'TODAY';
         
-        // Since we have fake bookings, essentially every future day has activity
         return 'OPEN'; 
     };
 
@@ -136,7 +131,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
         const nextStatus: CalendarSlot['status'] = slot.status === 'AVAILABLE' ? 'BLOCKED' : 'AVAILABLE';
         const newSlot: CalendarSlot = { ...slot, status: nextStatus };
         
-        // Update custom slots: remove old if exists, add new
         setCustomSlots(prev => [
             ...prev.filter(s => s.id !== slot.id),
             newSlot
@@ -167,8 +161,8 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
         body += `\n\n--- CONTACT INFO ---\n`;
         body += `Please reply with a Google Meet link to lock this slot.`;
 
-        // Open Mail Client
-        const mailtoLink = `mailto:contact@indra-ai.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        // Open Mail Client - UPDATED TO PROTON
+        const mailtoLink = `mailto:1ndradev4@proton.me?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.open(mailtoLink, '_blank');
 
         // Optimistically book locally for UX
@@ -198,7 +192,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                  <span className="text-white font-bold">{bookingSlot.time}</span>
                              </div>
                              
-                             {/* Show Project Context if coming from Tech Task */}
                              {projectEstimate > 0 && (
                                 <div className="flex justify-between border-b border-[var(--line-soft)] pb-2 opacity-70">
                                     <span className="text-[var(--text-secondary)]">PROJECT EST:</span>
@@ -234,7 +227,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
 
             <div className="max-w-4xl w-full bg-[var(--bg-canvas)] border-2 border-[var(--accent-amethyst-500)] rounded-[var(--radius-lg)] shadow-[var(--shadow-glow-amethyst)] overflow-hidden flex flex-col max-h-[95vh] relative">
                 
-                {/* CLOSE BUTTON (Absolute for cleaner header) */}
                 <button 
                     onClick={onClose}
                     className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--bg-void)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors border border-transparent hover:border-[var(--line-soft)] z-50"
@@ -242,11 +234,9 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                     ✕
                 </button>
 
-                {/* --- HEADER: MISSION BRIEFING (THE CARD) --- */}
                 <div className="border-b border-[var(--line-soft)] bg-[var(--bg-void)] shrink-0">
                     <div className="relative overflow-hidden bg-[var(--bg-surface)] border-b-4 border-[var(--accent-amethyst-500)] shadow-[var(--shadow-lg)]">
                         
-                        {/* 1. Header Bar */}
                         <div className="bg-[var(--accent-amethyst-500)] px-4 py-1 flex justify-between items-center">
                              <div className="flex items-center gap-2">
                                  <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
@@ -260,7 +250,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                         </div>
 
                         <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 items-center">
-                             {/* 2. Text Content */}
                              <div className="flex-1 space-y-3 w-full">
                                  <div className="font-display text-2xl md:text-3xl text-[var(--text-primary)] leading-none tracking-wider">
                                      OBJECTIVE: <span className="text-[var(--accent-amethyst-500)] drop-shadow-[0_0_8px_rgba(157,78,221,0.5)]">ANNIHILATE YOUR TASK.</span>
@@ -281,7 +270,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                  </div>
                              </div>
 
-                             {/* 3. The Action Button (Big, Topaz, High Contrast) */}
                              <div className="w-full md:w-auto shrink-0 mt-2 md:mt-0">
                                   {!estimation || (estimation.hours === 0 && estimation.cost === 0) ? (
                                       <button 
@@ -300,11 +288,9 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                                    Don't have a plan? Architect your spec with AI Trinity before booking. <span className="text-[var(--accent-emerald-500)] font-bold">Free to start.</span>
                                                </p>
                                            </div>
-                                           {/* Hover Fill Effect */}
                                            <div className="absolute inset-0 bg-[var(--accent-topaz-500)] translate-y-[100%] group-hover:translate-y-[98%] transition-transform duration-300 ease-out z-0 opacity-10"></div>
                                       </button>
                                   ) : (
-                                      /* Resume State */
                                       <button 
                                         onClick={onClose}
                                         className="w-full md:w-[340px] group relative bg-[var(--accent-emerald-500)]/10 border border-[var(--accent-emerald-500)] rounded p-4 text-left hover:bg-[var(--accent-emerald-500)]/20 transition-all"
@@ -328,26 +314,20 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                     </div>
                 </div>
 
-                {/* --- MAIN CONTENT GRID --- */}
                 <div className="flex-1 overflow-y-auto flex flex-col md:flex-row min-h-0 bg-[var(--bg-canvas)]">
-                    
-                    {/* LEFT: CALENDAR GRID */}
                     <div className="flex-[3] p-6 border-b md:border-b-0 md:border-r border-[var(--line-soft)]">
-                        {/* Month Nav */}
                         <div className="flex justify-between items-center mb-4">
                             <button onClick={handlePrevMonth} className="text-[var(--accent-sapphire-500)] hover:text-white font-display text-xl tracking-wider">{'<'} PREV</button>
                             <span className="font-display text-2xl text-[var(--text-primary)] tracking-widest">{monthNames[month]} {year}</span>
                             <button onClick={handleNextMonth} className="text-[var(--accent-sapphire-500)] hover:text-white font-display text-xl tracking-wider">NEXT {'>'}</button>
                         </div>
 
-                        {/* Days Header */}
                         <div className="grid grid-cols-7 gap-1 mb-2 text-center">
                             {['MON','TUE','WED','THU','FRI','SAT','SUN'].map(d => (
                                 <span key={d} className="font-mono text-[10px] text-[var(--text-muted)]">{d}</span>
                             ))}
                         </div>
 
-                        {/* Days Grid */}
                         <div className="grid grid-cols-7 gap-2">
                             {Array.from({ length: offset }).map((_, i) => (
                                 <div key={`empty-${i}`} className="aspect-square"></div>
@@ -367,7 +347,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                     bgClass = 'bg-[var(--accent-amethyst-500)]/20 border-[var(--accent-amethyst-500)] animate-pulse';
                                     textClass = 'text-[var(--accent-amethyst-500)]';
                                 } else {
-                                    // Future / Open
                                     bgClass = 'bg-[var(--accent-emerald-500)]/10 border-[var(--accent-emerald-500)]/50 hover:bg-[var(--accent-emerald-500)]/20';
                                     textClass = 'text-[var(--accent-emerald-500)]';
                                 }
@@ -392,7 +371,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                         </div>
                     </div>
 
-                    {/* RIGHT: SLOT DETAILS */}
                     <div className="flex-[2] p-6 bg-[var(--bg-surface)]/30 flex flex-col border-l border-[var(--line-soft)]">
                         <h3 className="font-display text-xl text-[var(--text-primary)] mb-4 border-b border-[var(--line-soft)] pb-2 tracking-widest">
                             {selectedDay ? `${selectedDay} ${monthNames[month]}` : "SELECT A DATE"}
@@ -408,7 +386,7 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                     <div key={slot.id} className={`p-3 rounded border flex justify-between items-center transition-colors ${
                                         slot.status === 'AVAILABLE' 
                                             ? 'bg-[var(--bg-canvas)] border-[var(--accent-emerald-500)] text-[var(--accent-emerald-500)]' 
-                                            : (slot.status === 'BLOCKED' ? 'bg-[var(--bg-void)] border-[var(--line-soft)] opacity-40 text-[var(--text-muted)]' : 'bg-[var(--bg-void)] border-[var(--accent-ruby-500)] opacity-80')
+                                            : (slot.status === 'BLOCKED' ? 'bg-[var(--bg-void)] border-[var(--line-soft)] opacity-40 text-[var(--text-muted)]' : 'bg-[var(--bg-void)] border border-[var(--line-soft)] opacity-80')
                                     }`}>
                                         <div>
                                             <div className="font-bold font-display text-lg tracking-wider">{slot.time}</div>
@@ -419,7 +397,6 @@ const BossRaidCalendar: React.FC<Props> = ({ onClose, isAdmin, onStartTechTask, 
                                             </div>
                                         </div>
                                         
-                                        {/* Actions */}
                                         {isAdmin ? (
                                             <button 
                                                 onClick={() => handleAdminToggleSlot(slot)}

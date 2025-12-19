@@ -37,28 +37,28 @@ export const InsightCartridgeVisual: React.FC<Props> = ({ cartridge, className =
                 <div className="bg-[var(--bg-void)] p-2 rounded border border-[var(--border-soft)]">
                     <div className="text-[10px] font-mono text-[var(--accent-amethyst-500)] mb-1">STRATEGY</div>
                     <div className="h-1 bg-[var(--bg-surface)] rounded-full overflow-hidden">
-                        <div className="h-full bg-[var(--accent-amethyst-500)]" style={{ width: `${cartridge.quadrants.strategy}%` }}></div>
+                        <div className="h-full bg-[var(--accent-amethyst-500)]" style={{ width: `${cartridge.quadrants.strategy.level}%` }}></div>
                     </div>
                 </div>
                  {/* Creative */}
                  <div className="bg-[var(--bg-void)] p-2 rounded border border-[var(--border-soft)]">
                     <div className="text-[10px] font-mono text-[var(--accent-emerald-500)] mb-1">CREATIVE</div>
                     <div className="h-1 bg-[var(--bg-surface)] rounded-full overflow-hidden">
-                        <div className="h-full bg-[var(--accent-emerald-500)]" style={{ width: `${cartridge.quadrants.creative}%` }}></div>
+                        <div className="h-full bg-[var(--accent-emerald-500)]" style={{ width: `${cartridge.quadrants.creative.level}%` }}></div>
                     </div>
                 </div>
                  {/* Producing */}
                  <div className="bg-[var(--bg-void)] p-2 rounded border border-[var(--border-soft)]">
                     <div className="text-[10px] font-mono text-[var(--accent-sapphire-500)] mb-1">PRODUCING</div>
                     <div className="h-1 bg-[var(--bg-surface)] rounded-full overflow-hidden">
-                        <div className="h-full bg-[var(--accent-sapphire-500)]" style={{ width: `${cartridge.quadrants.producing}%` }}></div>
+                        <div className="h-full bg-[var(--accent-sapphire-500)]" style={{ width: `${cartridge.quadrants.producing.level}%` }}></div>
                     </div>
                 </div>
                  {/* Media */}
                  <div className="bg-[var(--bg-void)] p-2 rounded border border-[var(--border-soft)]">
                     <div className="text-[10px] font-mono text-[var(--accent-ruby-500)] mb-1">MEDIA</div>
                     <div className="h-1 bg-[var(--bg-surface)] rounded-full overflow-hidden">
-                        <div className="h-full bg-[var(--accent-ruby-500)]" style={{ width: `${cartridge.quadrants.media}%` }}></div>
+                        <div className="h-full bg-[var(--accent-ruby-500)]" style={{ width: `${cartridge.quadrants.media.level}%` }}></div>
                     </div>
                 </div>
             </div>

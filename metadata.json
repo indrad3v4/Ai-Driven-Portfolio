@@ -1,5 +1,7 @@
 {
   "name": "Ai-Driven Portfolio",
   "description": "Ai-Driven Portfolio",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

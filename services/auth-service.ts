@@ -6,7 +6,7 @@
 
 import { auth, db, googleProvider } from "../lib/firebase";
 import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, User, signInAnonymously } from "firebase/auth";
-import { doc, setDoc, getDoc, updateDoc, increment, collection, addDoc, query, where, getDocs } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { InsightCartridge } from "../lib/insight-object";
 
 export interface UserProfile {
@@ -17,8 +17,10 @@ export interface UserProfile {
   isPremium: boolean;
 }
 
-// Helper: Sanitize object for Firestore
-// Uses JSON serialization to strip non-serializable types and converts undefined to null
+/**
+ * Sanitize object for Firestore.
+ * Firestore rejects 'undefined' values and non-plain objects.
+ */
 const sanitizeForFirestore = (obj: any): any => {
   return JSON.parse(JSON.stringify(obj, (key, value) => {
     if (value === undefined) return null;
@@ -32,17 +34,15 @@ export const loginWithGoogle = async (): Promise<UserProfile | null> => {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
     
-    // Check if user exists in Firestore, if not create
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
-      // New User - Give Free Trial Credits
       await setDoc(userRef, {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
-        credits: 20, // Free Trial
+        credits: 20,
         isPremium: false,
         createdAt: new Date().toISOString()
       });
@@ -57,7 +57,7 @@ export const loginWithGoogle = async (): Promise<UserProfile | null> => {
   }
 };
 
-// 2. SAVE WORKSPACE STATE (Authenticated)
+// 2. SAVE WORKSPACE STATE (Private)
 export const saveWorkspace = async (userId: string, cartridge: InsightCartridge) => {
     if (!userId) return;
     try {
@@ -73,62 +73,70 @@ export const saveWorkspace = async (userId: string, cartridge: InsightCartridge)
 export const savePublicCartridge = async (cartridge: InsightCartridge) => {
     if (!cartridge.id) return;
 
-    // Ensure we have an auth session (Anonymous or otherwise) for RLS
+    // Ensure session exists for ownership tracking required by rules
     if (!auth.currentUser) {
         try {
             await signInAnonymously(auth);
-        } catch (e) {
-            console.warn("Anonymous auth attempt failed (save)", e);
+        } catch (e: any) {
+            console.warn("Auto-Save: Anonymous auth failed", e.message);
         }
     }
 
     try {
         const cleanCartridge = sanitizeForFirestore(cartridge);
+        
+        // Rules require: request.resource.data.ownerId == request.auth.uid
+        if (auth.currentUser) {
+            cleanCartridge.ownerId = auth.currentUser.uid;
+        }
+        cleanCartridge.updatedAt = new Date().toISOString();
+
         await setDoc(doc(db, "public_cartridges", cartridge.id), cleanCartridge, { merge: true });
-        console.log("System Auto-Saved:", cartridge.id);
+        console.log("Cloud Sync OK:", cartridge.id.slice(0, 8));
     } catch (e: any) {
-        console.error("Auto-Save Failed", e.message);
+        const msg = e.message || e.toString();
+        if (e.code === 'permission-denied' || msg.includes('insufficient permissions')) {
+             console.warn("Cloud Sync Paused: Permission Denied. (Rules may be propagating or ownership mismatch)");
+        } else {
+             console.error("Cloud Sync Error:", msg);
+        }
     }
 };
 
 // 2c. LOAD PUBLIC CARTRIDGE
 export const loadPublicCartridge = async (id: string): Promise<InsightCartridge | null> => {
-    // Ensure we have an auth session (Anonymous or otherwise) for RLS
-    if (!auth.currentUser) {
-        try {
-            await signInAnonymously(auth);
-        } catch (e) {
-            console.warn("Anonymous auth attempt failed (load)", e);
-        }
-    }
-
+    // FIX: Collection is public (read: if true). 
+    // We do NOT attempt to sign in here to avoid race conditions and transient permission errors 
+    // while the auth state is transitioning.
     try {
         const snap = await getDoc(doc(db, "public_cartridges", id));
         if (snap.exists()) {
             return snap.data() as InsightCartridge;
         }
         return null;
-    } catch (e) {
-        console.error("Load Failed", e);
+    } catch (e: any) {
+        const msg = e.message || e.toString();
+        if (e.code === 'permission-denied' || msg.includes('insufficient permissions')) {
+             console.warn(`Restore Skipped: Access denied for ${id.slice(0,8)}. Rules propagation may be pending.`);
+             return null;
+        }
+        console.error("Restore Error:", msg);
         return null;
     }
 };
 
-// 3. DEDUCT CREDIT (Server-side validation recommended for prod, client-side for MVP)
+// 3. CREDITS
 export const deductCredit = async (userId: string): Promise<boolean> => {
     const userRef = doc(db, "users", userId);
     const userSnap = await getDoc(userRef);
-    
     if (userSnap.exists() && userSnap.data().credits >= 1) {
-        await updateDoc(userRef, {
-            credits: increment(-1)
-        });
+        await updateDoc(userRef, { credits: increment(-1) });
         return true;
     }
     return false;
 };
 
-// 4. OBSERVE AUTH STATE
+// 4. AUTH OBSERVATION
 export const subscribeToAuth = (callback: (user: User | null) => void) => {
     return onAuthStateChanged(auth, callback);
 };
@@ -137,19 +145,11 @@ export const logout = async () => {
     await firebaseSignOut(auth);
 };
 
-// 5. ACCESS CODE SYSTEM (Cabinet Unlock)
-
-/**
- * Generates a unique "TZ-" code and stores it in Firestore.
- * Used when a user hits the Turn 5 wall.
- */
+// 5. ACCESS CODES
 export const generateAccessCode = async (): Promise<string> => {
     try {
-        // Generate TZ-XXXX hex code
         const randomHex = Math.floor(Math.random() * 16777215).toString(16).toUpperCase().padStart(6, '0');
         const code = `TZ-${randomHex}`;
-        
-        // Store in 'access_codes' collection
         await setDoc(doc(db, "access_codes", code), {
             code: code,
             status: 'ACTIVE',
@@ -157,28 +157,20 @@ export const generateAccessCode = async (): Promise<string> => {
             claimedBy: null,
             claimedAt: null
         });
-        
         return code;
     } catch (e) {
-        console.error("Failed to generate access code", e);
-        // Fallback for offline/demo mode
+        console.error("Access Code Error:", e);
         return `TZ-${Math.floor(Math.random() * 900000) + 100000}`; 
     }
 };
 
-/**
- * Validates and claims an access code.
- * Returns true if valid and active.
- */
 export const claimAccessCode = async (code: string, userId?: string): Promise<boolean> => {
     try {
         const codeRef = doc(db, "access_codes", code);
         const codeSnap = await getDoc(codeRef);
-
         if (codeSnap.exists()) {
             const data = codeSnap.data();
             if (data.status === 'ACTIVE') {
-                // Mark as claimed
                 await updateDoc(codeRef, {
                     status: 'CLAIMED',
                     claimedBy: userId || 'anonymous',
@@ -186,20 +178,14 @@ export const claimAccessCode = async (code: string, userId?: string): Promise<bo
                 });
                 return true;
             } else if (data.status === 'CLAIMED') {
-                // For MVP, we might allow re-use by same user, but let's be strict for now
-                // Or if it's the same user, allow it. 
                 if (userId && data.claimedBy === userId) return true;
                 return false; 
             }
         }
-        
-        // Fallback for hardcoded admin/demo codes
+        // Fallback for hardcoded bypass keys
         if (code === "TZ_abc123xyz" || code === "esCDtT#1mwHLn@qHEjne") return true;
-        
         return false;
     } catch (e) {
-        console.error("Failed to verify code", e);
-        // If offline/error, allow specific fallback
         return code === "TZ_abc123xyz"; 
     }
 };

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -6,145 +7,96 @@
 const functions = require("firebase-functions");
 require('dotenv').config(); 
 
-// NATIVE FETCH IS AVAILABLE IN NODE 18+ (Gen 2 default)
-// We remove dependencies to keep the function lean and avoid version conflicts.
+/**
+ * Proxy function optimized for mobile/social browsers.
+ * Handles cases where 'Content-Type' headers might be missing or stripped.
+ */
+exports.proxy_gemini = functions
+  .runWith({ 
+    timeoutSeconds: 30,     // Total function timeout
+    memory: '512MB',        // Increased memory to reduce cold start duration
+    maxInstances: 50        // Scale quickly to handle spikes
+  })
+  .region('us-central1')
+  .https.onRequest(async (req, res) => {
+    // 1. CORS Headers
+    res.set('Access-Control-Allow-Origin', '*'); 
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.set('Access-Control-Max-Age', '3600');
 
-exports.proxy_gemini = functions.region('us-central1').https.onRequest(async (req, res) => {
-  // ==================================================================
-  // 1. UNIVERSAL CORS HANDLING (MUST BE FIRST)
-  // ==================================================================
-  // We set these headers immediately to ensure the browser accepts the response,
-  // even if the script crashes later or returns a 500 error.
-  res.set('Access-Control-Allow-Origin', '*'); 
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.set('Access-Control-Max-Age', '3600');
-
-  // Handle Preflight (Browser "Are you there?" check)
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
-
-  // ==================================================================
-  // 2. REQUEST VALIDATION & BODY PARSING (TRIZ: THE OMNIVORE ADAPTER)
-  // ==================================================================
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method Not Allowed" });
-    return;
-  }
-
-  try {
-    console.log("VERSION: DIRECT_RUN_V6_SOCIAL_FIX [START]");
-
-    // TRIZ FIX: Social Browsers (IG/Telegram) often strip 'Content-Type: application/json'
-    // forcing Firebase to treat the body as a raw string or buffer.
-    // We apply Principle 10 (Preliminary Action) to sanitize inputs before use.
-    let parsedBody = req.body;
-
-    // If body is a string (because Content-Type was stripped), force parse it.
-    if (typeof parsedBody === 'string') {
-        try {
-            console.log("[Proxy] Raw string body detected. Manually parsing.");
-            parsedBody = JSON.parse(parsedBody);
-        } catch (e) {
-            console.warn("[Proxy] Failed to parse string body. Proceeding raw.", e);
-        }
-    }
-
-    // If body is empty (common in some strict WebViews), initialize empty object
-    if (!parsedBody) {
-        parsedBody = {};
-    }
-
-    // ==================================================================
-    // 3. API KEY EXTRACTION
-    // ==================================================================
-    // Prioritize configured secrets, then env vars
-    const apiKey = 
-      (functions.config().google && functions.config().google.api_key) ||
-      (functions.config().gemini && functions.config().gemini.key) ||
-      process.env.GEMINI_API_KEY || 
-      process.env.API_KEY;
-    
-    if (!apiKey) {
-      console.error("CRITICAL: API Key missing.");
-      res.status(500).json({ error: "Server Configuration Error", details: "API Key missing" });
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
       return;
     }
 
-    // ==================================================================
-    // 4. PAYLOAD PREPARATION
-    // ==================================================================
-    const model = parsedBody.model || 'gemini-2.5-flash';
-    let geminiBody = { ...parsedBody };
-    delete geminiBody.model;
-
-    // Compatibility Adapter: 'prompt' -> 'contents'
-    // TRIZ UPDATE: Check for property existence (!== undefined) rather than truthiness.
-    // This allows empty strings "" to be processed correctly.
-    if (geminiBody.prompt !== undefined && !geminiBody.contents) {
-       console.log("[Proxy] Adapting legacy prompt");
-       const textPart = String(geminiBody.prompt || ""); 
-       geminiBody.contents = [{ parts: [{ text: textPart }] }];
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
     }
-    
-    // CRITICAL: Always remove 'prompt' to prevent "Unknown name" error from Gemini
-    if (geminiBody.prompt !== undefined) {
-        delete geminiBody.prompt;
-    }
-
-    // Final Safety Check
-    if (!geminiBody.contents) {
-        console.error("Invalid Payload Structure:", JSON.stringify(geminiBody));
-        res.status(400).json({ error: "Invalid Payload", details: "Missing 'contents' - Social Browser may have stripped body." });
-        return;
-    }
-
-    // ==================================================================
-    // 5. UPSTREAM REQUEST (NATIVE FETCH WITH TIMEOUT)
-    // ==================================================================
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    
-    // Create an abort controller for timeout (15s)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
-        const upstreamResponse = await fetch(apiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(geminiBody),
-            signal: controller.signal
-        });
+      // TRIZ FIX: Social Browsers (IG/Telegram/LinkedIn) often strip 'Content-Type: application/json'
+      // We manually parse the body if it arrives as a string.
+      let parsedBody = req.body;
+      if (typeof parsedBody === 'string') {
+          try {
+              parsedBody = JSON.parse(parsedBody);
+          } catch (e) {
+              console.warn("[Proxy] Body manual parse failed", e);
+          }
+      }
 
-        clearTimeout(timeout);
-        const data = await upstreamResponse.json();
-
-        if (!upstreamResponse.ok) {
-          console.error("Gemini API Error:", JSON.stringify(data));
-          // Forward the upstream error status code
-          res.status(upstreamResponse.status).json(data);
+      if (!parsedBody || !parsedBody.contents) {
+          res.status(400).json({ success: false, error: "Invalid Payload", details: "Missing contents" });
           return;
-        }
+      }
 
-        // Success
-        console.log("VERSION: DIRECT_RUN_V6_SOCIAL_FIX [SUCCESS]");
-        res.json(data);
+      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+      
+      if (!apiKey) {
+        res.status(500).json({ success: false, error: "Server Configuration Error", details: "API Key missing" });
+        return;
+      }
 
-    } catch (fetchError) {
-        clearTimeout(timeout);
-        if (fetchError.name === 'AbortError') {
-             console.error("Upstream Timeout");
-             res.status(504).json({ error: "Gateway Timeout", details: "Gemini API took too long to respond." });
-        } else {
-             throw fetchError;
-        }
+      const model = parsedBody.model || 'gemini-3-flash-preview';
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      
+      // Preparation
+      const geminiBody = { ...parsedBody };
+      delete geminiBody.model;
+
+      // Internal timeout to ensure we don't hit the Cloud Function limit blindly
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s for Gemini call
+
+      const upstreamResponse = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiBody),
+          signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      const data = await upstreamResponse.json();
+
+      if (!upstreamResponse.ok) {
+        res.status(upstreamResponse.status).json(data);
+        return;
+      }
+
+      res.status(200).json(data);
+
+    } catch (error) {
+      console.error("Proxy Logic Crash:", error.message);
+      
+      const statusCode = error.name === 'AbortError' ? 504 : 500;
+      const errorMessage = error.name === 'AbortError' ? "Upstream Timeout" : error.message;
+
+      res.status(statusCode).json({ 
+        success: false, 
+        error: "Internal Proxy Error", 
+        details: errorMessage 
+      });
     }
-
-  } catch (error) {
-    console.error("Proxy Logic Crash:", error);
-    // Because we set CORS headers at the top, this JSON will actually reach the frontend!
-    res.status(500).json({ proxyError: "Internal Proxy Crash", details: error.message });
-  }
-});
+  });

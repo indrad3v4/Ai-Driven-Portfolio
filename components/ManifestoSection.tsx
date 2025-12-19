@@ -1,4 +1,3 @@
-
 /**
  * @license SPDX-License-Identifier: Apache-2.0
  * Manifesto Section: The Core Philosophy
@@ -7,9 +6,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { generateOrganizationSchema, generateServiceSchema, injectJsonLd } from '../lib/seo';
+import { generateOrganizationSchema, injectJsonLd } from '../lib/seo';
 import { getTrendingAIKeywords } from '../services/gemini';
-import RetroButton from './RetroButton';
 
 interface ManifestoSectionProps {
   showFullManifesto?: boolean; // Kept for interface compatibility, though this design is intended for full view
@@ -60,20 +58,19 @@ const MANIFESTO_DATA = {
 };
 
 export const ManifestoSection: React.FC<ManifestoSectionProps> = ({
-  showFullManifesto = true,
   onAction
 }) => {
   const [trendingKeywords, setTrendingKeywords] = useState<string[]>(['AI Systems', 'TRIZ', 'Ambika', 'Neural Link']);
   const [isLoadingTrends, setIsLoadingTrends] = useState(true);
 
-  // 1. SEO Injection
+  // 1. SEO Injection - Updated contact email
   useEffect(() => {
     const orgSchema = generateOrganizationSchema({
         name: 'Indra-AI',
         description: MANIFESTO_DATA.left.header,
         url: window.location.origin,
         foundingDate: '2024',
-        email: 'contact@indra-ai.dev'
+        email: '1ndradev4@proton.me'
     });
     
     injectJsonLd(orgSchema, 'manifesto-schema');
