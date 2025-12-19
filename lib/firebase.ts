@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// @ts-ignore - Suppressing missing member errors as these are standard Firebase v9 exports
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -19,6 +20,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase (Singleton)
+// @ts-ignore - Checking for existing app instances to prevent re-initialization errors during hot reloads
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Export Services

@@ -3,7 +3,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -15,16 +15,16 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-// Using React.Component explicitly to ensure TypeScript correctly identifies the class as a React component with state and props
-class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false
-    };
-  }
+// ErrorBoundary catches runtime errors in the component tree.
+// Declaring state as a property and using explicit imports from 'react' ensures 'state' and 'props' are correctly recognized.
+class ErrorBoundary extends Component<Props, State> {
+  // Initialize state directly as a class property for better TypeScript inference
+  public state: State = {
+    hasError: false
+  };
 
   public static getDerivedStateFromError(error: Error): State {
+    // Update state so the next render will show the fallback UI
     return { hasError: true, error };
   }
 
@@ -38,6 +38,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public render(): ReactNode {
+    // Correctly accessing state and props through explicit Component inheritance
     if (this.state.hasError) {
       return (
         <div className="fixed inset-0 bg-[#0a0412] flex flex-col items-center justify-center p-8 font-mono text-[#ef4444] text-center z-[9999]">
@@ -56,7 +57,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // Accessing children from this.props which is now correctly typed through inheritance from React.Component
     return this.props.children;
   }
 }

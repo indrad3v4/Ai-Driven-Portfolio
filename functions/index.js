@@ -7,15 +7,14 @@
 const functions = require("firebase-functions");
 require('dotenv').config(); 
 
-/**
- * Proxy function optimized for mobile/social browsers.
- * Handles cases where 'Content-Type' headers might be missing or stripped.
- */
-exports.proxy_gemini = functions
+// --- DEPLOYMENT_VERSION: 1.0.4 ---
+// (Change this number to force Firebase to redeploy)
+
+const proxyHandler = functions
   .runWith({ 
-    timeoutSeconds: 30,     // Total function timeout
-    memory: '512MB',        // Increased memory to reduce cold start duration
-    maxInstances: 50        // Scale quickly to handle spikes
+    timeoutSeconds: 30,
+    memory: '512MB',
+    maxInstances: 50
   })
   .region('us-central1')
   .https.onRequest(async (req, res) => {
@@ -36,8 +35,6 @@ exports.proxy_gemini = functions
     }
 
     try {
-      // TRIZ FIX: Social Browsers (IG/Telegram/LinkedIn) often strip 'Content-Type: application/json'
-      // We manually parse the body if it arrives as a string.
       let parsedBody = req.body;
       if (typeof parsedBody === 'string') {
           try {
@@ -47,56 +44,54 @@ exports.proxy_gemini = functions
           }
       }
 
-      if (!parsedBody || !parsedBody.contents) {
-          res.status(400).json({ success: false, error: "Invalid Payload", details: "Missing contents" });
+      // IMPROVED HEALTH CHECK:
+      // If it's a "ping" or just doesn't look like a standard Gemini request, 
+      // return a status report instead of a 400 error from Google.
+      const isGeminiRequest = parsedBody && (parsedBody.contents || parsedBody.prompt);
+      
+      if (!isGeminiRequest) {
+          res.status(200).json({ 
+            success: true, 
+            status: "ONLINE", 
+            gateway: "INDRA_UPLINK_v1.0.4",
+            message: "Uplink stable. Send 'contents' array for processing.",
+            timestamp: new Date().toISOString(),
+            echo: parsedBody // Echo back what we received for debugging
+          });
           return;
       }
 
       const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-      
       if (!apiKey) {
-        res.status(500).json({ success: false, error: "Server Configuration Error", details: "API Key missing" });
+        res.status(500).json({ error: "Server Configuration Error", details: "API Key missing in environment" });
         return;
       }
 
       const model = parsedBody.model || 'gemini-3-flash-preview';
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       
-      // Preparation
+      // Prepare the upstream payload
       const geminiBody = { ...parsedBody };
       delete geminiBody.model;
-
-      // Internal timeout to ensure we don't hit the Cloud Function limit blindly
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s for Gemini call
 
       const upstreamResponse = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(geminiBody),
-          signal: controller.signal
+          body: JSON.stringify(geminiBody)
       });
 
-      clearTimeout(timeoutId);
       const data = await upstreamResponse.json();
-
-      if (!upstreamResponse.ok) {
-        res.status(upstreamResponse.status).json(data);
-        return;
-      }
-
-      res.status(200).json(data);
+      res.status(upstreamResponse.status).json(data);
 
     } catch (error) {
       console.error("Proxy Logic Crash:", error.message);
-      
-      const statusCode = error.name === 'AbortError' ? 504 : 500;
-      const errorMessage = error.name === 'AbortError' ? "Upstream Timeout" : error.message;
-
-      res.status(statusCode).json({ 
+      res.status(500).json({ 
         success: false, 
         error: "Internal Proxy Error", 
-        details: errorMessage 
+        details: error.message 
       });
     }
   });
+
+// Primary Export used by Firebase
+exports.callGemini = proxyHandler;

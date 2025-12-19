@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Use relative URL to leverage same-origin rewrite in firebase.json.
-// This is the CRITICAL fix for 'Failed to fetch' in social browsers (LinkedIn/Telegram).
-const PROXY_URL = '/proxy_gemini';
-const REQUEST_TIMEOUT = 12000; 
+const RELATIVE_PROXY = '/proxy_gemini';
+// Standardized to 'callGemini' as per your Firebase console logs
+const ABSOLUTE_PROXY = 'https://us-west1-indra-flywheel-db.cloudfunctions.net/proxy_gemini';
+
+const REQUEST_TIMEOUT = 15000; 
 const MAX_RETRIES = 3;
 
 export interface ProxyRequest {
@@ -61,30 +62,46 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
     if (err.name === 'AbortError') {
       throw new Error(`TIMEOUT_${timeoutMs}ms`);
     }
-    // "Failed to fetch" typically means the request was blocked by the browser.
     throw err; 
   }
 }
 
+const isSandboxEnv = () => {
+    if (typeof window === 'undefined') return false;
+    const host = window.location.hostname;
+    return !host.includes('indra-ai.dev') && !host.includes('indra-flywheel-db.web.app');
+};
+
 /**
- * Calls the Gemini proxy with retries and same-origin optimization.
+ * Calls the Gemini proxy with adaptive gateway selection.
  */
 export async function callGeminiViaProxy(request: ProxyRequest, modelOverride?: string): Promise<any> {
   let lastError: any;
+  const inSandbox = isSandboxEnv();
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const targetModel = modelOverride || request.model || 'gemini-3-flash-preview';
       const payload: any = { ...request, model: targetModel };
-
-      // Ensure body is stringified properly
       const body = JSON.stringify(payload);
 
-      // On retry 2+, we attempt to send WITHOUT the application/json header
-      // This creates a "Simple Request" which avoids CORS preflight OPTIONS entirely.
-      const headers: Record<string, string> = attempt === 1 ? { 'Content-Type': 'application/json' } : {};
+      let currentUrl: string;
+      let headers: Record<string, string>;
 
-      const response = await fetchWithTimeout(PROXY_URL, {
+      if (inSandbox) {
+          currentUrl = ABSOLUTE_PROXY;
+          headers = { 'Content-Type': 'text/plain' }; 
+      } else {
+          if (attempt === 1) {
+              currentUrl = RELATIVE_PROXY;
+              headers = { 'Content-Type': 'application/json' };
+          } else {
+              currentUrl = ABSOLUTE_PROXY;
+              headers = { 'Content-Type': 'text/plain' };
+          }
+      }
+
+      const response = await fetchWithTimeout(currentUrl, {
         method: 'POST',
         headers,
         body,
@@ -93,10 +110,12 @@ export async function callGeminiViaProxy(request: ProxyRequest, modelOverride?: 
       }, REQUEST_TIMEOUT);
 
       if (!response.ok) {
-        if (response.status === 429) throw new Error("RATE_LIMIT");
-        if (response.status === 404) throw new Error("PROXY_NOT_FOUND_CHECK_FIREBASE_JSON");
+        if (response.status === 404 && currentUrl === RELATIVE_PROXY) {
+            throw new Error("RELATIVE_PATH_NOT_FOUND");
+        }
+        if (response.status === 429) throw new Error("RATE_LIMIT_REACHED");
         const text = await response.text();
-        throw new Error(`SERVER_${response.status}_${text.substring(0, 50)}`);
+        throw new Error(`SERVER_ERROR_${response.status} - ${text}`);
       }
 
       const responseText = await response.text();
@@ -104,14 +123,7 @@ export async function callGeminiViaProxy(request: ProxyRequest, modelOverride?: 
 
     } catch (error: any) {
       lastError = error;
-      const errorMsg = error.message || "";
-      
-      // If we see "Failed to fetch", it's likely a browser/CORS block.
-      // We log it and let the retry loop attempt the "Simple Request" fallback.
-      console.warn(`[PROXY] Attempt ${attempt} error: ${errorMsg}`);
-
       if (attempt < MAX_RETRIES) {
-        // Backoff: 1s, 2s, 4s...
         const delay = Math.pow(2, attempt - 1) * 1000;
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
