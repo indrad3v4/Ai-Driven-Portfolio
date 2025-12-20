@@ -14,11 +14,12 @@ interface Props {
     cartridge: InsightCartridge;
     onUpdate: (update: InsightCartridge | ((prev: InsightCartridge) => InsightCartridge)) => void;
     theme: 'DARK' | 'LIGHT';
+    language: 'EN' | 'PL' | 'BEL';
     onAdminGrant: () => void;
     onOpenCalendar?: () => void;
 }
 
-const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onOpenCalendar }) => {
+const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, language, onOpenCalendar }) => {
     const [input, setInput] = useState('');
     const [isThinking, setIsThinking] = useState(false);
     const [isBooting, setIsBooting] = useState(false);
@@ -40,10 +41,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onOpenCa
                 
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
                     try {
-                        console.log(`[BOOT] Attempt ${attempt}/${maxRetries} to establish neural link...`);
-                        
-                        // Safety timeout for UI feedback
-                        const handshakeResult = await chatWithManagerAgent("SYSTEM_INIT_HANDSHAKE", cartridge);
+                        const handshakeResult = await chatWithManagerAgent("SYSTEM_INIT_HANDSHAKE", cartridge, language);
                         
                         onUpdate(prev => ({
                             ...prev,
@@ -51,22 +49,16 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onOpenCa
                             chatHistory: [{ role: 'model', content: handshakeResult.text }]
                         }));
                         
-                        console.log("[BOOT] ✅ Neural link stable.");
                         setIsBooting(false);
-                        return; // Success, exit retry loop
+                        return;
 
                     } catch (e: any) {
-                        console.error(`[BOOT] Attempt ${attempt} failed:`, e.message);
-                        
                         if (attempt < maxRetries) {
-                            const delay = Math.pow(2, attempt - 1) * 1000;
-                            console.log(`[BOOT] Retrying link in ${delay}ms...`);
-                            await new Promise(resolve => setTimeout(resolve, delay));
+                            await new Promise(resolve => setTimeout(resolve, 1000));
                         } else {
-                            // Final failure - provide fallback UI state
                             onUpdate(p => ({ 
                                 ...p, 
-                                chatHistory: [{ role: 'model', content: "Uplink unstable on mobile network. I am Ambika. Manual link override engaged. What is your name, Architect?" }] 
+                                chatHistory: [{ role: 'model', content: "Neural link unstable. Manual override engaged. What is your name, Architect?" }] 
                             }));
                         }
                     }
@@ -76,7 +68,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onOpenCa
             
             bootSystemWithRetry();
         }
-    }, [cartridge?.id]);
+    }, [cartridge?.id, language]);
 
     const handleSend = async (forcedMsg?: string) => {
         const msg = forcedMsg || input;
@@ -90,7 +82,7 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onOpenCa
 
         setIsThinking(true);
         try {
-            const result = await chatWithManagerAgent(msg, cartridge);
+            const result = await chatWithManagerAgent(msg, cartridge, language);
             if (result.searchUrls) setGroundingUrls(result.searchUrls);
             
             onUpdate(prev => {
@@ -107,8 +99,6 @@ const SystemWorkspace: React.FC<Props> = ({ cartridge, onUpdate, theme, onOpenCa
     };
 
     const isSystemLocked = isThinking || isBooting;
-
-    // TRIZ Principle #24: Safe Intermediary Access
     const ambikaData = cartridge?.ambikaData || {};
 
     return (

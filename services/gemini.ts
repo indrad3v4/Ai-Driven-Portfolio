@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -15,8 +16,6 @@ const API_URL = "https://us-west1-indra-flywheel-db.cloudfunctions.net/proxy_gem
 async function callGeminiViaProxy(payload: { model: string; contents: any[]; config?: any }) {
     console.log("[PROXY] Sending payload:", JSON.stringify(payload, null, 2));
 
-    // FIX: Structure the body correctly for the Cloud Function / Gemini API
-    // 'systemInstruction' and 'tools' must be at the ROOT level, NOT inside generationConfig.
     const body = {
         contents: payload.contents,
         generationConfig: {
@@ -59,7 +58,7 @@ const buildHistoryContents = (cartridge: InsightCartridge, newMessage: string) =
 };
 
 // --- MAIN FUNCTION: Chat with Manager ---
-export async function chatWithManagerAgent(message: string, cartridge: InsightCartridge): Promise<{ text: string; updatedCartridge: Partial<InsightCartridge>; searchUrls?: string[] }> {
+export async function chatWithManagerAgent(message: string, cartridge: InsightCartridge, language: string = 'EN'): Promise<{ text: string; updatedCartridge: Partial<InsightCartridge>; searchUrls?: string[] }> {
     const currentStage = cartridge.ambikaStage || 0;
     const isHandshake = message === "SYSTEM_INIT_HANDSHAKE";
     
@@ -69,18 +68,26 @@ export async function chatWithManagerAgent(message: string, cartridge: InsightCa
     You are **AMBIKA**, a Human-Centric Strategy Orchestrator. 
     Tone: Senior Strategist, direct, respectful, empathetic.
     
+    **LANGUAGE PROTOCOL:**
+    - The user has selected the language: **${language}**.
+    - You MUST respond EXCLUSIVELY in this language.
+    - If language is PL, use professional and warm Polish.
+    - If language is BEL, use professional Belarusian.
+    - If language is EN, use professional English.
+    - All JSON fields 'response' must be in the specified language.
+
     **YOUR 8-STAGE JOURNEY (Strict Sequence):**
     0. **HANDSHAKE**: Ask ONLY for their name. Establish the human link.
     1. **THE CABINET**: Greet them by name. Give them their "Cabinet Key" (ID: ${cartridge.id}) and explain the journey: Extracting insight from their digital thread, building the 7-point Creative Concept, and locking a production sprint.
-    2. **THE PROBE**: Ask for ANY digital entry point. Explicitly state that it can be anything: a GitHub repo, a social media profile, a blog post, a project URL, or even a specific LinkedIn thread. Any fragment that holds their "Insight."
-    3. **GOALS & TASKS**: Use GOOGLE SEARCH on their URL to define what the system must actually DO.
-    4. **STRATEGIC BACKGROUND**: Analyze the situation, competitors, and target audience via Search Grounding based on their URL.
+    2. **THE PROBE**: Ask for ANY digital entry point (URL, LinkedIn, Blog, GH). Explain that anything holding their "Insight" works.
+    3. **GOALS & TASKS**: Define what the system must actually DO based on their input.
+    4. **STRATEGIC BACKGROUND**: Analyze the situation and competitors via search grounding.
     5. **THE BIG IDEA**: Formulate the core concept that drives all communication.
-    6. **ACTIVATION & PRODUCTION**: Define the mechanics and the "Rate-cards/Timings" for production.
+    6. **ACTIVATION & PRODUCTION**: Define the mechanics and "Rate-cards/Timings".
     7. **MEDIA & FUNNEL**: Plan the promotion and user conversion path.
     8. **THE LOCK**: Final conclusion, cost estimation, and next steps.
     
-    **SEARCH GROUNDING PROTOCOL:**
+    **GROUNDING PROTOCOL:**
     - Use 'googleSearch' tool when a URL is provided.
     - Map findings to these frameworks: [${frameworkContext}].
     - ALWAYS return valid JSON following the schema.
@@ -88,8 +95,6 @@ export async function chatWithManagerAgent(message: string, cartridge: InsightCa
 
     try {
         const history = buildHistoryContents(cartridge, message);
-        const needsSearch = (currentStage >= 2 && currentStage <= 4) || message.includes("http");
-        // const tools = needsSearch ? [{ googleSearch: {} }] : [];
 
         const responseData = await callGeminiViaProxy({
             model: "gemini-3-flash-preview",
@@ -97,7 +102,6 @@ export async function chatWithManagerAgent(message: string, cartridge: InsightCa
             config: {
                 systemInstruction: { parts: [{ text: systemInstructionText }] },
                 responseMimeType: "application/json",
-                // tools,
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
@@ -129,15 +133,12 @@ export async function chatWithManagerAgent(message: string, cartridge: InsightCa
         
         const candidate = responseData.candidates?.[0];
         let text = candidate?.content?.parts?.[0]?.text || "{}";
-        
-        // Clean up markdown code blocks
-        text = text.replace(/``````/g, '').trim();
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
         
         let parsed;
         try {
             parsed = JSON.parse(text);
         } catch (e) {
-            console.warn("JSON Parse failed, using raw text fallback", text);
             parsed = { response: text, nextStage: currentStage };
         }
         
@@ -160,20 +161,29 @@ export async function chatWithManagerAgent(message: string, cartridge: InsightCa
     } catch (e) {
         console.error("Ambika Chat Error:", e);
         return {
-            text: `⚠️ Neural Link Error: ${(e as Error).message}. (Check console for details)`,
+            text: `⚠️ Neural Link Error: ${(e as Error).message}`,
             updatedCartridge: {}
         };
     }
 }
 
-// ... Keep other functions (generateLevelRecap, getTrendingAIKeywords) as they were in previous version ...
 export async function generateLevelRecap(stats: LevelStats, playerB64: string | null, villainB64: string | null): Promise<{ data: string; mimeType: string }> {
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.API_KEY || "YOUR_API_KEY_HERE";
-    const ai = new GoogleGenAI({ apiKey });
-    const parts: any[] = [{ text: `Generate a retro arcade-style mission debrief infographic...` }];
     return { data: "", mimeType: "" }; 
 }
 
 export async function getTrendingAIKeywords(): Promise<string[]> {
-    return ['AI Systems', 'TRIZ', 'Ambika', 'Neural Link', 'Agentic Workflows'];
+    try {
+        const responseData = await callGeminiViaProxy({
+            model: "gemini-3-flash-preview",
+            contents: [{ role: 'user', parts: [{ text: "Return a list of 6 absolute most trending AI terms, tools or technologies right now. Return ONLY the names, separated by commas. Focus on agentic AI, LLM benchmarks, and industrial systems." }] }],
+            config: {
+                tools: [{ googleSearch: {} }]
+            }
+        });
+        const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const keywords = text.split(',').map((s: string) => s.trim().toUpperCase()).filter((s: string) => s.length > 0);
+        return keywords.length > 0 ? keywords : ['AGENTIC WORKFLOWS', 'DEEPSEEK-V3', 'REASONING MODELS', 'TRIZ ARCHITECTURE', 'NEURAL LINK', 'INDUSTRIAL MLOPS'];
+    } catch (e) {
+        return ['AGENTIC WORKFLOWS', 'DEEPSEEK-V3', 'REASONING MODELS', 'TRIZ ARCHITECTURE', 'NEURAL LINK', 'INDUSTRIAL MLOPS'];
+    }
 }
